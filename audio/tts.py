@@ -7,12 +7,17 @@ import queue
 from pathlib import Path
 import re
 import time
+from .shared_audio import audio_reference
+import numpy as np
+from scipy import signal
 
 
 class TextToSpeech:
-    def __init__(self, workspace) -> None:
+    def __init__(self, workspace, sample_rate) -> None:
         self.logger = logging.getLogger(__class__.__name__)
         self.workspace = workspace
+
+        self.sample_rate = sample_rate
 
         self.queue = queue.Queue()
 
@@ -26,8 +31,33 @@ class TextToSpeech:
     def play_wav(self, path: str):
         try:
             audio, samplerate = sf.read(path)
-            sd.play(audio, samplerate)
+
+            if samplerate != self.sample_rate:
+                num_samples = int(len(audio) * self.sample_rate / samplerate)
+                audio = signal.resample(audio, num_samples)
+
+            if audio.ndim > 1:
+                audio = audio.mean(axis=1)
+            audio = (audio * 32767).astype(np.int16)
+
+            sd.play(audio, self.sample_rate)
+
+            chunk_size = 8000
+            for i in range(0, len(audio), chunk_size):
+                chunk = audio[i : i + chunk_size]
+
+                if len(chunk) < chunk_size:
+                    chunk = np.pad(chunk, (0, chunk_size - len(chunk)))
+
+                audio_reference.update_playback(chunk)
+                self.logger.info(
+                    f"Updated reference: min={chunk.min()}, max={chunk.max()}, mean={chunk.mean()}"
+                )
+                time.sleep(chunk_size / self.sample_rate)
+
             sd.wait()
+            audio_reference.clear()
+
         except Exception as e:
             self.logger.error(f"Error playing {path}: {e}")
 

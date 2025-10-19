@@ -38,23 +38,31 @@ class Core:
     def __init__(self, workspace) -> None:
         self.logger = logging.getLogger(__class__.__name__)
 
+        self.sample_rate = 16000
+
         self.workspace = Path(workspace)
 
-        self.stt = SpeechToText()
-        self.tts = TextToSpeech(self.workspace)
+        self.stt = None
+        self.stt_thread = threading.Thread(
+            target=self._start_stt_thread, daemon=True
+        ).start()
+
+        self.tts = TextToSpeech(workspace=self.workspace, sample_rate=self.sample_rate)
+
+    def _start_stt_thread(self):
+        self.stt = SpeechToText(sample_rate=self.sample_rate)
+        self.stt.listen()
 
     def _process_queue(self):
         if not self.tts.queue.empty():
             self.tts.play_wav(self.tts.queue.get())
 
     async def run(self):
-        stt_thread = threading.Thread(target=self.stt.listen, daemon=True).start()
-
         query = []
 
         while True:
             try:
-                if not self.stt.query.empty():
+                if self.stt and not self.stt.query.empty():
                     query.append(self.stt.query.get())
 
                 if query:
@@ -68,12 +76,14 @@ class Core:
             except RuntimeError as e:
                 self.logger.critical(e)
                 return
+
             except KeyboardInterrupt:
                 self.stt.shutdown_flag.set()
 
-                if stt_thread:
-                    stt_thread.join()
+                if self.stt_thread:
+                    self.stt_thread.join()
                 return
+
             except Exception as e:
                 self.logger.error(e)
                 return
