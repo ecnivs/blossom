@@ -14,14 +14,14 @@ import speexdsp
 
 class SpeechToText:
     def __init__(self, sample_rate) -> None:
-        self.logger = logging.getLogger(__class__.__name__)
+        self.logger = logging.getLogger(self.__class__.__name__)
         self.shutdown_flag = threading.Event()
 
         self.model = Model(".models/vosk/vosk-model-small-en-us-0.15")
         self.spk_model = SpkModel(".models/vosk/vosk-model-spk-0.4")
 
         self.buffer = queue.Queue()
-        self.query = queue.Queue()
+        self.query: str = ""
 
         self.sample_rate = sample_rate
 
@@ -33,6 +33,8 @@ class SpeechToText:
         self.echo_canceller = speexdsp.EchoCanceller_create(
             8000, 2048, self.sample_rate
         )
+
+        self.lock = threading.Lock()
 
     def _get_audio_vector(self, audio_path) -> np.ndarray:
         data, _ = sf.read(audio_path)
@@ -70,7 +72,7 @@ class SpeechToText:
         cleaned_array = np.frombuffer(cleaned_bytes, dtype=np.int16)
         max_amplitude = np.abs(cleaned_array).max()
 
-        if max_amplitude > 500:
+        if max_amplitude > 1000:
             self.buffer.put(cleaned_bytes)
         else:
             silence = np.zeros(len(cleaned_array), dtype=np.int16).tobytes()
@@ -103,8 +105,10 @@ class SpeechToText:
                         spk = result["spk"]
                         if self._consine_similarity(spk) > self.threshold or 1 == 1:
                             if "text" in result and result["text"]:
-                                text = result["text"]
-                                self.logger.info(f"Recognized: {text}")
-                                self.query.put(text)
+                                with self.lock:
+                                    self.query = result["text"].strip()
+                                    self.logger.info(f"Recognized: {self.query}")
+                                while not self.buffer.empty():
+                                    self.buffer.get()
                         else:
                             self.logger.warning("Unrecognized speaker: Ignored")

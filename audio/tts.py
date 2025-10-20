@@ -14,7 +14,7 @@ from scipy import signal
 
 class TextToSpeech:
     def __init__(self, workspace, sample_rate) -> None:
-        self.logger = logging.getLogger(__class__.__name__)
+        self.logger = logging.getLogger(self.__class__.__name__)
         self.workspace = workspace
 
         self.sample_rate = sample_rate

@@ -8,6 +8,7 @@ import asyncio
 from pathlib import Path
 import threading
 from audio import SpeechToText, TextToSpeech
+from orchestrator import Orchestrator
 
 load_dotenv()
 
@@ -36,7 +37,7 @@ def new_workspace():
 
 class Core:
     def __init__(self, workspace) -> None:
-        self.logger = logging.getLogger(__class__.__name__)
+        self.logger = logging.getLogger(self.__class__.__name__)
 
         self.sample_rate = 16000
 
@@ -49,27 +50,37 @@ class Core:
 
         self.tts = TextToSpeech(workspace=self.workspace, sample_rate=self.sample_rate)
 
+        self.orchestrator = Orchestrator()
+
     def _start_stt_thread(self):
         self.stt = SpeechToText(sample_rate=self.sample_rate)
         self.stt.listen()
+
+    def _thread(self, target, args=None):
+        if args:
+            threading.Thread(target=target, args=args, daemon=True).start()
+        else:
+            threading.Thread(target=target, daemon=True).start()
 
     def _process_queue(self):
         if not self.tts.queue.empty():
             self.tts.play_wav(self.tts.queue.get())
 
     async def run(self):
-        query = []
-
         while True:
             try:
-                if self.stt and not self.stt.query.empty():
-                    query.append(self.stt.query.get())
-
-                if query:
-                    a = ", ".join(query)
-                    self.tts.speak(f"Recognized: {a}")
-
-                query = []
+                if self.stt:
+                    with self.stt.lock:
+                        if self.stt.query:
+                            response = self.orchestrator.process(self.stt.query)
+                            self._thread(
+                                target=self.tts.speak,
+                                args=(
+                                    response.get("TEXT"),
+                                    response.get("LANGUAGE"),
+                                ),
+                            )
+                            self.stt.query = ""
 
                 self._process_queue()
                 await asyncio.sleep(0.1)
