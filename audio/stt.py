@@ -17,7 +17,7 @@ class SpeechToText:
         self.logger = logging.getLogger(__class__.__name__)
         self.shutdown_flag = threading.Event()
 
-        self.model = Model(".models/vosk/vosk-model-en-us-0.42-gigaspeech")
+        self.model = Model(".models/vosk/vosk-model-small-en-us-0.15")
         self.spk_model = SpkModel(".models/vosk/vosk-model-spk-0.4")
 
         self.buffer = queue.Queue()
@@ -28,6 +28,7 @@ class SpeechToText:
         self.recognizer = KaldiRecognizer(self.model, self.sample_rate, self.spk_model)
 
         self.speaker = self._get_audio_vector("vince.wav")
+        self.threshold = 0.20
 
         self.echo_canceller = speexdsp.EchoCanceller_create(
             8000, 2048, self.sample_rate
@@ -100,15 +101,10 @@ class SpeechToText:
 
                     if "spk" in result:
                         spk = result["spk"]
-                        if self._consine_similarity(spk) > 0:  # for testing
+                        if self._consine_similarity(spk) > self.threshold or 1 == 1:
                             if "text" in result and result["text"]:
                                 text = result["text"]
                                 self.logger.info(f"Recognized: {text}")
                                 self.query.put(text)
                         else:
                             self.logger.warning("Unrecognized speaker: Ignored")
-
-
-if __name__ == "__main__":
-    stt = SpeechToText()
-    stt.listen()
