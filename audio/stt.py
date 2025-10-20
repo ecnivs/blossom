@@ -103,7 +103,7 @@ class SpeechToText:
 
                     if "spk" in result:
                         spk = result["spk"]
-                        if self._consine_similarity(spk) > self.threshold or 1 == 1:
+                        if self._consine_similarity(spk) > self.threshold:
                             if "text" in result and result["text"]:
                                 with self.lock:
                                     self.query = result["text"].strip()
