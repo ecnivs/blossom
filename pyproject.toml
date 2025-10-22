@@ -1,7 +1,7 @@
 [project]
 name = "blossom"
 version = "0.1.0"
-description = "Add your description here"
+description = "My Voice Assistant"
 readme = "README.md"
 requires-python = ">=3.11.13"
 dependencies = [
