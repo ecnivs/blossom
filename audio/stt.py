@@ -30,7 +30,7 @@ class SpeechToText:
         self.recognizer = KaldiRecognizer(self.model, self.sample_rate, self.spk_model)
 
         self.speaker = self._get_audio_vector(config.stt.speaker_reference_path)
-        self.threshold = config.stt.speaker_threshold
+        self.threshold = config.stt.speaker_identification_threshold
 
         self.echo_canceller = speexdsp.EchoCanceller_create(
             config.audio.echo_canceller.filter_length,
@@ -114,7 +114,10 @@ class SpeechToText:
 
                     if "spk" in result:
                         spk = result["spk"]
-                        if self._consine_similarity(spk) > self.threshold:
+                        if (
+                            self._consine_similarity(spk) > self.threshold
+                            or not config.stt.speaker_identification
+                        ):
                             if "text" in result and result["text"]:
                                 query_text = result["text"].strip()
                                 self.logger.info(f"Recognized: {query_text}")

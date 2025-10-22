@@ -38,7 +38,8 @@ class STTConfig:
     model_path: str = ".models/vosk/vosk-model-small-en-us-0.15"
     speaker_model_path: str = ".models/vosk/vosk-model-spk-0.4"
     speaker_reference_path: str = ".speakers/vince.wav"
-    speaker_threshold: float = 0.20
+    speaker_identification: bool = False
+    speaker_identification_threshold: float = 0.20
     max_amplitude: int = 1000
 
 
@@ -214,7 +215,8 @@ class Config:
                 "model_path": self.stt.model_path,
                 "speaker_model_path": self.stt.speaker_model_path,
                 "speaker_reference_path": self.stt.speaker_reference_path,
-                "speaker_threshold": self.stt.speaker_threshold,
+                "speaker_identification": self.stt.speaker_identification,
+                "speaker_identification_threshold": self.stt.speaker_identification_threshold,
                 "max_amplitude": self.stt.max_amplitude,
             },
             "tts": {
