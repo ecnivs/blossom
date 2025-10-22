@@ -1,0 +1,67 @@
+# Blossom Configuration
+
+# Audio Configuration
+audio:
+  sample_rate: 16000
+  channels: 1
+  blocksize: 8000
+  dtype: "int16"
+  amplitude_threshold: 1000
+  echo_canceller:
+    filter_length: 8000
+    frame_size: 2048
+
+# Speech-to-Text Configuration
+stt:
+  model_path: ".models/vosk/vosk-model-small-en-us-0.15"
+  speaker_model_path: ".models/vosk/vosk-model-spk-0.4"
+  speaker_reference_path: ".speakers/vince.wav"
+  speaker_threshold: 0.00
+  max_amplitude: 1000
+
+# Text-to-Speech Configuration
+tts:
+  model_name: "tts_models/multilingual/multi-dataset/xtts_v2"
+  voices_directory: ".voices"
+  device: "auto"  # auto, cpu, cuda
+  progress_bar: true
+
+# Gemini AI Configuration
+gemini:
+  models:
+    "2.5": "gemini-2.5-flash"
+    "2.0": "gemini-2.0-flash"
+  default_model: "2.5"
+  max_retries: 3
+  retry_delay_base: 2
+
+# Logging Configuration
+logging:
+  level: "DEBUG"
+  format: "%(levelname)s - %(message)s"
+  force: true
+
+# Application Configuration
+app:
+  name: "Blossom"
+  version: "0.1.0"
+  description: "My Voice Assistant"
+  workspace_temp: true
+  loop_delay: 0.1
+
+# Voice Assistant Configuration
+assistant:
+  name: "Blossom"
+  role: "Personal Assistant"
+  default_language: "en"
+  supported_languages:
+    - "en"
+    - "es"
+    - "fr"
+    - "de"
+    - "it"
+    - "pt"
+    - "ru"
+    - "ja"
+    - "ko"
+    - "zh"

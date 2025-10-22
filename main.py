@@ -9,6 +9,7 @@ from pathlib import Path
 import threading
 from audio import SpeechToText, TextToSpeech
 from orchestrator import Orchestrator
+from config import config
 
 load_dotenv()
 
@@ -16,7 +17,9 @@ load_dotenv()
 # Logging Configuration
 # -------------------------------
 logging.basicConfig(
-    level=logging.DEBUG, format="%(levelname)s - %(message)s", force=True
+    level=config.logging.get_level(),
+    format=config.logging.format,
+    force=config.logging.force,
 )
 
 
@@ -39,7 +42,7 @@ class Core:
     def __init__(self, workspace) -> None:
         self.logger = logging.getLogger(self.__class__.__name__)
 
-        self.sample_rate = 16000
+        self.sample_rate = config.audio.sample_rate
 
         self.workspace = Path(workspace)
 
@@ -76,14 +79,14 @@ class Core:
                             self._thread(
                                 target=self.tts.speak,
                                 args=(
-                                    response.get("TEXT"),
-                                    response.get("LANGUAGE"),
+                                    response["TEXT"],
+                                    response["LANGUAGE"],
                                 ),
                             )
                             self.stt.query = ""
 
                 self._process_queue()
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(config.app.loop_delay)
             except RuntimeError as e:
                 self.logger.critical(e)
                 return

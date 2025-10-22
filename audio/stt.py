@@ -10,6 +10,7 @@ from numpy.linalg import norm
 import soundfile as sf
 from .shared_audio import audio_reference
 import speexdsp
+from config import config
 
 
 class SpeechToText:
@@ -17,8 +18,8 @@ class SpeechToText:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.shutdown_flag = threading.Event()
 
-        self.model = Model(".models/vosk/vosk-model-small-en-us-0.15")
-        self.spk_model = SpkModel(".models/vosk/vosk-model-spk-0.4")
+        self.model = Model(config.stt.model_path)
+        self.spk_model = SpkModel(config.stt.speaker_model_path)
 
         self.buffer = queue.Queue()
         self.query: str = ""
@@ -27,11 +28,13 @@ class SpeechToText:
 
         self.recognizer = KaldiRecognizer(self.model, self.sample_rate, self.spk_model)
 
-        self.speaker = self._get_audio_vector(".speakers/vince.wav")
-        self.threshold = 0.00
+        self.speaker = self._get_audio_vector(config.stt.speaker_reference_path)
+        self.threshold = config.stt.speaker_threshold
 
         self.echo_canceller = speexdsp.EchoCanceller_create(
-            8000, 2048, self.sample_rate
+            config.audio.echo_canceller.filter_length,
+            config.audio.echo_canceller.frame_size,
+            self.sample_rate,
         )
 
         self.lock = threading.Lock()
@@ -72,7 +75,7 @@ class SpeechToText:
         cleaned_array = np.frombuffer(cleaned_bytes, dtype=np.int16)
         max_amplitude = np.abs(cleaned_array).max()
 
-        if max_amplitude > 1000:
+        if max_amplitude > config.audio.amplitude_threshold:
             self.buffer.put(cleaned_bytes)
         else:
             silence = np.zeros(len(cleaned_array), dtype=np.int16).tobytes()
@@ -90,10 +93,10 @@ class SpeechToText:
 
         with sd.RawInputStream(
             callback=self._audio_callback,
-            channels=1,
+            channels=config.audio.channels,
             samplerate=self.sample_rate,
-            blocksize=8000,
-            dtype="int16",
+            blocksize=config.audio.blocksize,
+            dtype=config.audio.dtype,
         ):
             while not self.shutdown_flag.is_set():
                 data = self.buffer.get()

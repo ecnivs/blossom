@@ -1,10 +1,11 @@
 from typing import Dict
+from config import config
 
 
 class Builder:
     def __init__(self) -> None:
-        self.name = "Blossom"
-        self.role = "Personal Assistant"
+        self.name = config.assistant.name
+        self.role = config.assistant.role
 
         self.traits: Dict[str, Dict[str, bool]] = {
             "Personality": {

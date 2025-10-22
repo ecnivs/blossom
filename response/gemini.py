@@ -2,6 +2,7 @@ import logging
 import random
 from google.genai import Client
 import time
+from config import config
 
 
 class Gemini:
@@ -10,12 +11,13 @@ class Gemini:
 
         self.client = Client()
 
-        self.models = {
-            "2.5": "gemini-2.5-flash",
-            "2.0": "gemini-2.0-flash",
-        }
+        self.models = config.gemini.models
 
-    def get_response(self, query, model=2.5, max_retries=3):
+    def get_response(self, query, model=None, max_retries=None):
+        if model is None:
+            model = config.gemini.default_model
+        if max_retries is None:
+            max_retries = config.gemini.max_retries
         current_model = self.models.get(str(model))
 
         if not current_model:
@@ -44,7 +46,9 @@ class Gemini:
                     return text
 
                 except Exception as e:
-                    wait = 2**attempt + random.uniform(0, 1)
+                    wait = config.gemini.retry_delay_base**attempt + random.uniform(
+                        0, 1
+                    )
                     self.logger.warning(
                         f"Attempt {attempt}/{max_retries} with {fallback_model} failed: {e}. Retrying in {wait:.1f}s"
                     )

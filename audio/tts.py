@@ -10,6 +10,7 @@ import time
 from .shared_audio import audio_reference
 import numpy as np
 from scipy import signal
+from config import config
 
 
 class TextToSpeech:
@@ -21,11 +22,13 @@ class TextToSpeech:
 
         self.queue = queue.Queue()
 
-        self.coqui_model = "tts_models/multilingual/multi-dataset/xtts_v2"
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.tts = TTS(model_name=self.coqui_model, progress_bar=True).to(self.device)
+        self.coqui_model = config.tts.model_name
+        self.device = config.tts.get_device()
+        self.tts = TTS(
+            model_name=self.coqui_model, progress_bar=config.tts.progress_bar
+        ).to(self.device)
 
-        self.voices_dir = Path(".voices")
+        self.voices_dir = Path(config.tts.voices_directory)
         self.voices_dir.mkdir(exist_ok=True)
 
     def play_wav(self, path: str):

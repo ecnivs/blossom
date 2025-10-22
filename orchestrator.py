@@ -1,6 +1,7 @@
 import logging
 from response import Gemini
 from prompt import Builder
+from config import config
 
 
 class Orchestrator:
@@ -23,4 +24,7 @@ class Orchestrator:
             elif line.startswith("RESPONSE:"):
                 text = line[len("RESPONSE:") :].strip()
 
-        return {"LANGUAGE": lang.lower() or "en", "TEXT": text}
+        return {
+            "LANGUAGE": lang.lower() or config.assistant.default_language,
+            "TEXT": text,
+        }
