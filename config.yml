@@ -16,7 +16,7 @@ stt:
   model_path: ".models/vosk/vosk-model-small-en-us-0.15"
   speaker_model_path: ".models/vosk/vosk-model-spk-0.4"
   speaker_reference_path: ".speakers/vince.wav"
-  speaker_threshold: 0.00
+  speaker_threshold: 0.20
   max_amplitude: 1000
 
 # Text-to-Speech Configuration
