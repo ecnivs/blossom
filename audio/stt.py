@@ -14,9 +14,10 @@ from config import config
 
 
 class SpeechToText:
-    def __init__(self, sample_rate) -> None:
+    def __init__(self, sample_rate, core=None) -> None:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.shutdown_flag = threading.Event()
+        self.core = core
 
         self.model = Model(config.stt.model_path)
         self.spk_model = SpkModel(config.stt.speaker_model_path)
@@ -108,9 +109,16 @@ class SpeechToText:
                         spk = result["spk"]
                         if self._consine_similarity(spk) > self.threshold:
                             if "text" in result and result["text"]:
-                                with self.lock:
-                                    self.query = result["text"].strip()
-                                    self.logger.info(f"Recognized: {self.query}")
+                                query_text = result["text"].strip()
+                                self.logger.info(f"Recognized: {query_text}")
+
+                                if self.core:
+                                    self.core._on_query_ready(query_text)
+                                else:
+                                    self.logger.warning(
+                                        "No core reference available for signaling"
+                                    )
+
                                 while not self.buffer.empty():
                                     self.buffer.get()
                         else:
