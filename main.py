@@ -49,7 +49,8 @@ class Core:
         self.stt = None
         self.stt_thread = threading.Thread(
             target=self._start_stt_thread, daemon=True
-        ).start()
+        )
+        self.stt_thread.start()
 
         self.tts = TextToSpeech(workspace=self.workspace, sample_rate=self.sample_rate)
 
@@ -92,7 +93,8 @@ class Core:
                 return
 
             except KeyboardInterrupt:
-                self.stt.shutdown_flag.set()
+                if self.stt:
+                    self.stt.shutdown_flag.set()
 
                 if self.stt_thread:
                     self.stt_thread.join()
