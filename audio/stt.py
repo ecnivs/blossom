@@ -108,12 +108,12 @@ class SpeechToText:
             silence = np.zeros(len(cleaned_array), dtype=np.int16).tobytes()
             self.buffer.put(silence)
 
-    def _consine_similarity(self, data):
-        consine_similarity = np.dot(self.speaker, data) / (
+    def _cosine_similarity(self, data):
+        cosine_similarity = np.dot(self.speaker, data) / (
             norm(self.speaker) * norm(data)
         )
-        self.logger.info(f"consine_similarity: {consine_similarity}")
-        return consine_similarity
+        self.logger.info(f"cosine_similarity: {cosine_similarity}")
+        return cosine_similarity
 
     def set_tts_playing(self, playing: bool):
         with self.lock:
@@ -139,9 +139,6 @@ class SpeechToText:
 
         return False
 
-    def _handle_voice_activity(self):
-        if self.core and hasattr(self.core, "tts"):
-            self.core.tts.pause_playback()
 
     def reset_voice_interrupt_state(self):
         with self.lock:
@@ -186,7 +183,7 @@ class SpeechToText:
                     if "spk" in result:
                         spk = result["spk"]
                         if (
-                            self._consine_similarity(spk) > self.threshold
+                            self._cosine_similarity(spk) > self.threshold
                             or not config.stt.speaker_identification
                         ):
                             if "text" in result and result["text"]:

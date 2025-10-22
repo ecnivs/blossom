@@ -81,11 +81,6 @@ class Core:
         else:
             self.voice_interrupt_event.set()
 
-    def _thread(self, target, args=None):
-        if args:
-            threading.Thread(target=target, args=args, daemon=True).start()
-        else:
-            threading.Thread(target=target, daemon=True).start()
 
     def _process_queue(self):
         if not self.tts.queue.empty():
