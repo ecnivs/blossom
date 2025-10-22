@@ -12,9 +12,9 @@ class Orchestrator:
 
         self.gemini = Gemini()
 
-    def process(self, query) -> None:
+    async def process(self, query) -> dict:
         prompt = self.prompt.build("Vince", query)
-        response = self.gemini.get_response(f"{prompt}\n\n{query}")
+        response = await self.gemini.get_response(f"{prompt}\n\n{query}")
 
         lang, text = None, None
 
@@ -25,6 +25,6 @@ class Orchestrator:
                 text = line[len("RESPONSE:") :].strip()
 
         return {
-            "LANGUAGE": lang.lower() or config.assistant.default_language,
+            "LANGUAGE": lang or config.assistant.default_language,
             "TEXT": text,
         }

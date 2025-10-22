@@ -38,6 +38,10 @@ class SpeechToText:
             self.sample_rate,
         )
 
+        self.audio_buffer = np.zeros(config.audio.blocksize, dtype=np.int16)
+        self.reference_buffer = np.zeros(config.audio.blocksize, dtype=np.int16)
+        self.cleaned_buffer = np.zeros(config.audio.blocksize, dtype=np.int16)
+
         self.lock = threading.Lock()
 
     def _get_audio_vector(self, audio_path) -> np.ndarray:
@@ -62,15 +66,18 @@ class SpeechToText:
         if status:
             self.logger.warning(f"Audio callback status: {status}")
 
-        reference = audio_reference.get_playback()
         mic_data = np.frombuffer(indata, dtype=np.int16)
+        reference = audio_reference.get_playback()
 
         if len(reference) != len(mic_data):
-            reference = np.resize(reference, len(mic_data))
+            if len(mic_data) <= len(self.reference_buffer):
+                self.reference_buffer[: len(mic_data)] = reference[: len(mic_data)]
+                reference = self.reference_buffer[: len(mic_data)]
+            else:
+                reference = np.resize(reference, len(mic_data))
 
         mic_bytes = mic_data.tobytes()
         reference_bytes = reference.tobytes()
-
         cleaned_bytes = self.echo_canceller.process(mic_bytes, reference_bytes)
 
         cleaned_array = np.frombuffer(cleaned_bytes, dtype=np.int16)

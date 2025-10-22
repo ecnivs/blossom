@@ -1,7 +1,8 @@
 import logging
 import random
 from google.genai import Client
-import time
+import aiohttp
+import asyncio
 from config import config
 
 
@@ -10,10 +11,35 @@ class Gemini:
         self.logger = logging.getLogger(self.__class__.__name__)
 
         self.client = Client()
+        self.session = None
+        self._session_lock = asyncio.Lock()
 
         self.models = config.gemini.models
 
-    def get_response(self, query, model=None, max_retries=None):
+    async def _get_session(self):
+        """Get or create HTTP session with connection pooling"""
+        if self.session is None or self.session.closed:
+            connector = aiohttp.TCPConnector(
+                limit=10,
+                limit_per_host=5,
+                ttl_dns_cache=300,
+                use_dns_cache=True,
+            )
+            timeout = aiohttp.ClientTimeout(total=30, connect=10)
+            self.session = aiohttp.ClientSession(
+                connector=connector,
+                timeout=timeout,
+                headers={"User-Agent": "Blossom-Voice-Assistant/1.0"},
+            )
+            self.logger.info("Created new HTTP session with connection pooling")
+        return self.session
+
+    async def _close_session(self):
+        if self.session and not self.session.closed:
+            await self.session.close()
+            self.logger.info("Closed HTTP session")
+
+    async def get_response(self, query, model=None, max_retries=None):
         if model is None:
             model = config.gemini.default_model
         if max_retries is None:
@@ -32,6 +58,8 @@ class Gemini:
 
             for attempt in range(1, max_retries + 1):
                 try:
+                    session = await self._get_session()
+
                     response = self.client.models.generate_content(
                         model=fallback_model, contents=query
                     )
@@ -52,7 +80,7 @@ class Gemini:
                     self.logger.warning(
                         f"Attempt {attempt}/{max_retries} with {fallback_model} failed: {e}. Retrying in {wait:.1f}s"
                     )
-                    time.sleep(wait)
+                    await asyncio.sleep(wait)
 
             self.logger.warning(
                 f"Model {fallback_model} exhausted retries, trying fallback if available"

@@ -110,10 +110,12 @@ class Core:
                     break
 
                 if self.current_query:
-                    response = self.orchestrator.process(self.current_query)
+                    response = await self.orchestrator.process(self.current_query)
                     self.logger.info(f"Response: {response}")
 
-                    await self._speak_async(response["TEXT"], response["LANGUAGE"])
+                    await self._speak_async(
+                        response["TEXT"], response["LANGUAGE"].lower()
+                    )
 
                     self._process_queue()
 
