@@ -11,6 +11,7 @@ import soundfile as sf
 from .shared_audio import audio_reference
 import speexdsp
 from config import config
+import time
 
 
 class SpeechToText:
@@ -44,6 +45,14 @@ class SpeechToText:
 
         self.lock = threading.Lock()
 
+        self.is_listening = True
+        self.tts_playing = False
+        self.voice_interrupt_threshold = config.audio.voice_interrupt_threshold
+        self.interrupt_detected = False
+        self.voice_activity_detected = False
+        self.recognition_timeout = 0.5
+        self.voice_activity_start_time = None
+
     def _get_audio_vector(self, audio_path) -> np.ndarray:
         data, _ = sf.read(audio_path)
 
@@ -67,6 +76,16 @@ class SpeechToText:
             self.logger.warning(f"Audio callback status: {status}")
 
         mic_data = np.frombuffer(indata, dtype=np.int16)
+
+        self._detect_voice_activity(mic_data)
+
+        with self.lock:
+            if not self.is_listening and not self.tts_playing:
+                return
+
+        if self.tts_playing and not self.voice_activity_detected:
+            return
+
         reference = audio_reference.get_playback()
 
         if len(reference) != len(mic_data):
@@ -96,6 +115,43 @@ class SpeechToText:
         self.logger.info(f"consine_similarity: {consine_similarity}")
         return consine_similarity
 
+    def set_tts_playing(self, playing: bool):
+        with self.lock:
+            self.tts_playing = playing
+            if not playing:
+                self.interrupt_detected = False
+                self.voice_activity_detected = False
+
+    def _detect_voice_activity(self, mic_data: np.ndarray) -> bool:
+        if not self.tts_playing:
+            return False
+
+        rms_energy = np.sqrt(np.mean(mic_data.astype(np.float32) ** 2))
+
+        if rms_energy > self.voice_interrupt_threshold:
+            if not self.voice_activity_detected:
+                self.logger.info("Waiting for speech...")
+                self.voice_activity_start_time = time.time()
+                if self.core and hasattr(self.core, "tts"):
+                    self.core.tts.pause_playback()
+            self.voice_activity_detected = True
+            return True
+
+        return False
+
+    def _handle_voice_activity(self):
+        if self.core and hasattr(self.core, "tts"):
+            self.core.tts.pause_playback()
+
+    def reset_voice_interrupt_state(self):
+        with self.lock:
+            self.voice_activity_detected = False
+            self.voice_activity_start_time = None
+            self.is_listening = True
+        while not self.buffer.empty():
+            self.buffer.get()
+        self.recognizer.Reset()
+
     def listen(self) -> None:
         self.logger.info("Listening...")
 
@@ -108,6 +164,21 @@ class SpeechToText:
         ):
             while not self.shutdown_flag.is_set():
                 data = self.buffer.get()
+
+                # Check for partial results first (for immediate interrupt)
+                if self.tts_playing and self.voice_activity_detected:
+                    partial_result = json.loads(self.recognizer.PartialResult())
+                    if "partial" in partial_result and partial_result["partial"]:
+                        partial_text = partial_result["partial"].strip().lower()
+                        if "stop" in partial_text:
+                            self.logger.info("Voice interrupt detected")
+                            if self.core:
+                                self.core._on_voice_interrupt()
+                            self.voice_activity_detected = False
+                            self.voice_activity_start_time = None
+                            while not self.buffer.empty():
+                                self.buffer.get()
+                            continue
 
                 if self.recognizer.AcceptWaveform(data=data):
                     result = json.loads(self.recognizer.Result())
@@ -122,12 +193,42 @@ class SpeechToText:
                                 query_text = result["text"].strip()
                                 self.logger.info(f"Recognized: {query_text}")
 
-                                if self.core:
-                                    self.core._on_query_ready(query_text)
-                                else:
-                                    self.logger.warning(
-                                        "No core reference available for signaling"
+                                if self.tts_playing and self.voice_activity_detected:
+                                    self.logger.info("Voice interrupt detected")
+                                    if self.core:
+                                        self.core._on_voice_interrupt()
+                                    self.voice_activity_detected = False
+                                    self.voice_activity_start_time = None
+                                    while not self.buffer.empty():
+                                        self.buffer.get()
+                                    continue
+
+                                if not self.tts_playing:
+                                    if self.core:
+                                        self.core._on_query_ready(query_text)
+                                    else:
+                                        self.logger.warning(
+                                            "No core reference available for signaling"
+                                        )
+                                elif (
+                                    self.tts_playing
+                                    and not self.voice_activity_detected
+                                ):
+                                    if self.core and hasattr(self.core, "tts"):
+                                        self.core.tts.resume_playback()
+                                elif (
+                                    self.tts_playing
+                                    and self.voice_activity_detected
+                                    and self.voice_activity_start_time
+                                ):
+                                    elapsed = (
+                                        time.time() - self.voice_activity_start_time
                                     )
+                                    if elapsed > self.recognition_timeout:
+                                        if self.core and hasattr(self.core, "tts"):
+                                            self.core.tts.resume_playback()
+                                        self.voice_activity_detected = False
+                                        self.voice_activity_start_time = None
 
                                 while not self.buffer.empty():
                                     self.buffer.get()

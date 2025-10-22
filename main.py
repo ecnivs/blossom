@@ -58,9 +58,11 @@ class Core:
         self.tts = TextToSpeech(workspace=self.workspace, sample_rate=self.sample_rate)
 
         self.orchestrator = Orchestrator()
+        self.voice_interrupt_event = asyncio.Event()
 
     def _start_stt_thread(self):
         self.stt = SpeechToText(sample_rate=self.sample_rate, core=self)
+        self.tts.set_stt_reference(self.stt)
         self.stt.listen()
 
     def _on_query_ready(self, query: str):
@@ -71,6 +73,14 @@ class Core:
         else:
             self.query_event.set()
 
+    def _on_voice_interrupt(self):
+        self.tts.stop_playback()
+
+        if self.event_loop:
+            self.event_loop.call_soon_threadsafe(self.voice_interrupt_event.set)
+        else:
+            self.voice_interrupt_event.set()
+
     def _thread(self, target, args=None):
         if args:
             threading.Thread(target=target, args=args, daemon=True).start()
@@ -78,6 +88,10 @@ class Core:
             threading.Thread(target=target, daemon=True).start()
 
     def _process_queue(self):
+        if not self.tts.queue.empty():
+            if self.stt:
+                self.stt.set_tts_playing(True)
+
         while not self.tts.queue.empty():
             self.tts.play_wav(self.tts.queue.get())
 
@@ -94,6 +108,7 @@ class Core:
                 _, pending = await asyncio.wait(
                     [
                         asyncio.create_task(self.query_event.wait()),
+                        asyncio.create_task(self.voice_interrupt_event.wait()),
                         asyncio.create_task(self.shutdown_event.wait()),
                     ],
                     return_when=asyncio.FIRST_COMPLETED,
@@ -105,6 +120,12 @@ class Core:
                 if self.shutdown_event.is_set():
                     self.logger.info("Shutdown event received")
                     break
+
+                if self.voice_interrupt_event.is_set():
+                    self.voice_interrupt_event.clear()
+                    if self.stt:
+                        self.stt.reset_voice_interrupt_state()
+                    continue
 
                 if self.current_query:
                     response = await self.orchestrator.process(self.current_query)
@@ -118,7 +139,6 @@ class Core:
 
                     self.current_query = None
                     self.query_event.clear()
-                    self.logger.info("Query processed and reset")
 
             except RuntimeError as e:
                 self.logger.critical(e)

@@ -28,6 +28,7 @@ class AudioConfig:
     blocksize: int = 8000
     dtype: str = "int16"
     amplitude_threshold: int = 1000
+    voice_interrupt_threshold: int = 2000
     echo_canceller: EchoCancellerConfig = field(default_factory=EchoCancellerConfig)
 
 

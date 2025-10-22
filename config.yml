@@ -7,6 +7,7 @@ audio:
   blocksize: 8000
   dtype: "int16"
   amplitude_threshold: 1000
+  voice_interrupt_threshold: 2000
   echo_canceller:
     filter_length: 8000
     frame_size: 2048

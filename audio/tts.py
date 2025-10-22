@@ -30,8 +30,42 @@ class TextToSpeech:
         self.voices_dir = Path(config.tts.voices_directory)
         self.voices_dir.mkdir(exist_ok=True)
 
+        self.stt_reference = None
+        self.interrupted = False
+        self.current_stream = None
+        self.temporarily_paused = False
+
+    def set_stt_reference(self, stt):
+        self.stt_reference = stt
+
+    def pause_playback(self):
+        self.temporarily_paused = True
+        if self.current_stream:
+            sd.stop()
+            self.current_stream = None
+
+    def resume_playback(self):
+        self.temporarily_paused = False
+
+    def stop_playback(self):
+        self.interrupted = True
+        if self.current_stream:
+            sd.stop()
+            self.current_stream = None
+
+        while not self.queue.empty():
+            try:
+                self.queue.get_nowait()
+            except queue.Empty:
+                break
+
     def play_wav(self, path: str):
         try:
+            self.interrupted = False
+
+            if self.stt_reference:
+                self.stt_reference.set_tts_playing(True)
+
             audio, samplerate = sf.read(path)
 
             if samplerate != self.sample_rate:
@@ -42,30 +76,42 @@ class TextToSpeech:
                 audio = audio.mean(axis=1)
             audio = (audio * 32767).astype(np.int16)
 
-            sd.play(audio, self.sample_rate)
+            self._current_audio = audio
+            self.current_stream = sd.play(audio, self.sample_rate)
 
             chunk_size = 8000
             for i in range(0, len(audio), chunk_size):
+                if self.interrupted:
+                    break
+
                 chunk = audio[i : i + chunk_size]
 
                 if len(chunk) < chunk_size:
                     chunk = np.pad(chunk, (0, chunk_size - len(chunk)))
 
-                audio_reference.update_playback(chunk)
-                self.logger.debug(
-                    f"Updated reference: min={chunk.min()}, max={chunk.max()}, mean={chunk.mean()}"
-                )
+                if not self.temporarily_paused:
+                    audio_reference.update_playback(chunk)
+
                 time.sleep(chunk_size / self.sample_rate)
 
-            sd.wait()
+            if not self.interrupted:
+                sd.wait()
+
             audio_reference.clear()
+            self.current_stream = None
+
+            if self.stt_reference:
+                self.stt_reference.set_tts_playing(False)
 
         except Exception as e:
             self.logger.error(f"Error playing {path}: {e}")
+            if self.stt_reference:
+                self.stt_reference.set_tts_playing(False)
 
     def speak(self, text: str, language: str = "en"):
         try:
             sentences = re.split(r"(?<=[.!?。！？])\s+", text.strip())
+
             for sentence in sentences:
                 if not sentence:
                     continue
