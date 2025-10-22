@@ -1,4 +1,3 @@
-import threading
 from TTS.api import TTS
 import torch
 import sounddevice as sd
@@ -16,11 +15,9 @@ from scipy import signal
 class TextToSpeech:
     def __init__(self, workspace, sample_rate) -> None:
         self.logger = logging.getLogger(self.__class__.__name__)
-
         self.workspace = workspace
-        self.sample_rate = sample_rate
 
-        self.shutdown_flag = threading.Event()
+        self.sample_rate = sample_rate
 
         self.queue = queue.Queue()
 
@@ -31,12 +28,7 @@ class TextToSpeech:
         self.voices_dir = Path(".voices")
         self.voices_dir.mkdir(exist_ok=True)
 
-    def speech_worker(self):
-        while not self.shutdown_flag.set():
-            if not self.queue.empty():
-                self._play_wav(self.queue.get())
-
-    def _play_wav(self, path: str):
+    def play_wav(self, path: str):
         try:
             audio, samplerate = sf.read(path)
 
