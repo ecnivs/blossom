@@ -68,10 +68,8 @@ class Core:
 
         if self.event_loop:
             self.event_loop.call_soon_threadsafe(self.query_event.set)
-            self.logger.info("Query event set via call_soon_threadsafe")
         else:
             self.query_event.set()
-            self.logger.info("Query event set (direct)")
 
     def _thread(self, target, args=None):
         if args:
@@ -93,7 +91,6 @@ class Core:
 
         while not self.shutdown_event.is_set():
             try:
-                self.logger.debug("Waiting for query event...")
                 _, pending = await asyncio.wait(
                     [
                         asyncio.create_task(self.query_event.wait()),

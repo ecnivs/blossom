@@ -1,5 +1,4 @@
 from TTS.api import TTS
-import torch
 import sounddevice as sd
 import soundfile as sf
 import logging
@@ -53,7 +52,7 @@ class TextToSpeech:
                     chunk = np.pad(chunk, (0, chunk_size - len(chunk)))
 
                 audio_reference.update_playback(chunk)
-                self.logger.info(
+                self.logger.debug(
                     f"Updated reference: min={chunk.min()}, max={chunk.max()}, mean={chunk.mean()}"
                 )
                 time.sleep(chunk_size / self.sample_rate)
