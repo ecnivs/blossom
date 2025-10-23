@@ -14,7 +14,7 @@ audio:
 
 # Speech-to-Text Configuration
 stt:
-  model_path: ".models/vosk/vosk-model-en-us-0.42-gigaspeech"
+  model_path: ".models/vosk/vosk-model-small-en-us-0.15"
   speaker_model_path: ".models/vosk/vosk-model-spk-0.4"
   speaker_reference_path: ".speakers/vince.wav"
   speaker_identification: false

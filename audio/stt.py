@@ -139,7 +139,6 @@ class SpeechToText:
 
         return False
 
-
     def reset_voice_interrupt_state(self):
         with self.lock:
             self.voice_activity_detected = False
@@ -162,7 +161,6 @@ class SpeechToText:
             while not self.shutdown_flag.is_set():
                 data = self.buffer.get()
 
-                # Check for partial results first (for immediate interrupt)
                 if self.tts_playing and self.voice_activity_detected:
                     partial_result = json.loads(self.recognizer.PartialResult())
                     if "partial" in partial_result and partial_result["partial"]:

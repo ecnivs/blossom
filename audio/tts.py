@@ -34,6 +34,7 @@ class TextToSpeech:
         self.interrupted = False
         self.current_stream = None
         self.temporarily_paused = False
+        self.speak_interrupted = False
 
     def set_stt_reference(self, stt):
         self.stt_reference = stt
@@ -49,8 +50,10 @@ class TextToSpeech:
 
     def stop_playback(self):
         self.interrupted = True
+        self.speak_interrupted = True
+
+        sd.stop()
         if self.current_stream:
-            sd.stop()
             self.current_stream = None
 
         while not self.queue.empty():
@@ -62,6 +65,7 @@ class TextToSpeech:
     def play_wav(self, path: str):
         try:
             self.interrupted = False
+            self.speak_interrupted = False
 
             if self.stt_reference:
                 self.stt_reference.set_tts_playing(True)
@@ -82,6 +86,7 @@ class TextToSpeech:
             chunk_size = 8000
             for i in range(0, len(audio), chunk_size):
                 if self.interrupted:
+                    sd.stop()
                     break
 
                 chunk = audio[i : i + chunk_size]
@@ -96,6 +101,8 @@ class TextToSpeech:
 
             if not self.interrupted:
                 sd.wait()
+            else:
+                sd.stop()
 
             audio_reference.clear()
             self.current_stream = None
@@ -110,11 +117,22 @@ class TextToSpeech:
 
     def speak(self, text: str, language: str = "en"):
         try:
+            self.speak_interrupted = False
+
+            if self.speak_interrupted:
+                self.logger.info("Speak interrupted, skipping text generation")
+                return
+
             sentences = re.split(r"(?<=[.!?。！？])\s+", text.strip())
 
             for sentence in sentences:
                 if not sentence:
                     continue
+
+                if self.speak_interrupted:
+                    self.logger.info("Speak interrupted during generation, stopping")
+                    return
+
                 path = self.workspace / f"{time.time_ns()}_speech.wav"
 
                 self.tts.tts_to_file(
@@ -123,6 +141,10 @@ class TextToSpeech:
                     speaker_wav=self.voices_dir / f"{language}.wav",
                     language=language,
                 )
+                if self.speak_interrupted:
+                    self.logger.info("Speak interrupted during generation, stopping")
+                    return
+
                 self.queue.put(str(path))
         except Exception as e:
             raise Exception("Failed to generate speech audio") from e
