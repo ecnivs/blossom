@@ -119,10 +119,6 @@ class TextToSpeech:
         try:
             self.speak_interrupted = False
 
-            if self.speak_interrupted:
-                self.logger.info("Speak interrupted, skipping text generation")
-                return
-
             sentences = re.split(r"(?<=[.!?。！？])\s+", text.strip())
 
             for sentence in sentences:
@@ -130,7 +126,6 @@ class TextToSpeech:
                     continue
 
                 if self.speak_interrupted:
-                    self.logger.info("Speak interrupted during generation, stopping")
                     return
 
                 path = self.workspace / f"{time.time_ns()}_speech.wav"
@@ -142,7 +137,6 @@ class TextToSpeech:
                     language=language,
                 )
                 if self.speak_interrupted:
-                    self.logger.info("Speak interrupted during generation, stopping")
                     return
 
                 self.queue.put(str(path))

@@ -24,8 +24,6 @@ class SpeechToText:
         self.spk_model = SpkModel(config.stt.speaker_model_path)
 
         self.buffer = queue.Queue()
-        self.query: str = ""
-
         self.sample_rate = sample_rate
 
         self.recognizer = KaldiRecognizer(self.model, self.sample_rate, self.spk_model)
@@ -39,16 +37,13 @@ class SpeechToText:
             self.sample_rate,
         )
 
-        self.audio_buffer = np.zeros(config.audio.blocksize, dtype=np.int16)
         self.reference_buffer = np.zeros(config.audio.blocksize, dtype=np.int16)
-        self.cleaned_buffer = np.zeros(config.audio.blocksize, dtype=np.int16)
 
         self.lock = threading.Lock()
 
         self.is_listening = True
         self.tts_playing = False
         self.voice_interrupt_threshold = config.audio.voice_interrupt_threshold
-        self.interrupt_detected = False
         self.voice_activity_detected = False
         self.recognition_timeout = 0.5
         self.voice_activity_start_time = None
@@ -112,14 +107,12 @@ class SpeechToText:
         cosine_similarity = np.dot(self.speaker, data) / (
             norm(self.speaker) * norm(data)
         )
-        self.logger.info(f"cosine_similarity: {cosine_similarity}")
         return cosine_similarity
 
     def set_tts_playing(self, playing: bool):
         with self.lock:
             self.tts_playing = playing
             if not playing:
-                self.interrupt_detected = False
                 self.voice_activity_detected = False
 
     def _detect_voice_activity(self, mic_data: np.ndarray) -> bool:
@@ -130,7 +123,6 @@ class SpeechToText:
 
         if rms_energy > self.voice_interrupt_threshold:
             if not self.voice_activity_detected:
-                self.logger.info("Waiting for speech...")
                 self.voice_activity_start_time = time.time()
                 if self.core and hasattr(self.core, "tts"):
                     self.core.tts.pause_playback()
@@ -138,6 +130,12 @@ class SpeechToText:
             return True
 
         return False
+
+    def _clear_buffer_and_reset(self):
+        self.voice_activity_detected = False
+        self.voice_activity_start_time = None
+        while not self.buffer.empty():
+            self.buffer.get()
 
     def reset_voice_interrupt_state(self):
         with self.lock:
@@ -149,8 +147,6 @@ class SpeechToText:
         self.recognizer.Reset()
 
     def listen(self) -> None:
-        self.logger.info("Listening...")
-
         with sd.RawInputStream(
             callback=self._audio_callback,
             channels=config.audio.channels,
@@ -158,6 +154,8 @@ class SpeechToText:
             blocksize=config.audio.blocksize,
             dtype=config.audio.dtype,
         ):
+            self.logger.info("Listening...")
+
             while not self.shutdown_flag.is_set():
                 data = self.buffer.get()
 
@@ -166,13 +164,12 @@ class SpeechToText:
                     if "partial" in partial_result and partial_result["partial"]:
                         partial_text = partial_result["partial"].strip().lower()
                         if "stop" in partial_text:
-                            self.logger.info("Voice interrupt detected")
                             if self.core:
                                 self.core._on_voice_interrupt()
-                            self.voice_activity_detected = False
-                            self.voice_activity_start_time = None
-                            while not self.buffer.empty():
-                                self.buffer.get()
+                            self._clear_buffer_and_reset()
+                            self.logger.info(
+                                "Voice Interrupt detected! stopped speaking"
+                            )
                             continue
 
                 if self.recognizer.AcceptWaveform(data=data):
@@ -186,25 +183,17 @@ class SpeechToText:
                         ):
                             if "text" in result and result["text"]:
                                 query_text = result["text"].strip()
-                                self.logger.info(f"Recognized: {query_text}")
+                                self.logger.info(f"Recognized {query_text}")
 
                                 if self.tts_playing and self.voice_activity_detected:
-                                    self.logger.info("Voice interrupt detected")
                                     if self.core:
                                         self.core._on_voice_interrupt()
-                                    self.voice_activity_detected = False
-                                    self.voice_activity_start_time = None
-                                    while not self.buffer.empty():
-                                        self.buffer.get()
+                                    self._clear_buffer_and_reset()
                                     continue
 
                                 if not self.tts_playing:
                                     if self.core:
                                         self.core._on_query_ready(query_text)
-                                    else:
-                                        self.logger.warning(
-                                            "No core reference available for signaling"
-                                        )
                                 elif (
                                     self.tts_playing
                                     and not self.voice_activity_detected
@@ -227,5 +216,3 @@ class SpeechToText:
 
                                 while not self.buffer.empty():
                                     self.buffer.get()
-                        else:
-                            self.logger.warning("Unrecognized speaker: Ignored")

@@ -13,9 +13,6 @@ from config import config
 
 load_dotenv()
 
-# -------------------------------
-# Logging Configuration
-# -------------------------------
 logging.basicConfig(
     level=config.logging.get_level(),
     format=config.logging.format,
@@ -23,9 +20,6 @@ logging.basicConfig(
 )
 
 
-# -------------------------------
-# Temporary Workspace
-# -------------------------------
 @contextmanager
 def new_workspace():
     """
@@ -91,7 +85,6 @@ class Core:
 
     def _on_query_ready(self, query: str):
         self.current_query = query
-
         if self.event_loop:
             self.event_loop.call_soon_threadsafe(self.query_event.set)
         else:
@@ -99,7 +92,6 @@ class Core:
 
     def _on_voice_interrupt(self):
         self.tts.stop_playback()
-
         if self.event_loop:
             self.event_loop.call_soon_threadsafe(self.voice_interrupt_event.set)
         else:
@@ -110,7 +102,6 @@ class Core:
         await loop.run_in_executor(None, self.tts.speak, text, language)
 
     async def run(self):
-        self.logger.info("Starting event-driven main loop")
         self.event_loop = asyncio.get_running_loop()
 
         while not self.shutdown_event.is_set():
@@ -128,7 +119,6 @@ class Core:
                     task.cancel()
 
                 if self.shutdown_event.is_set():
-                    self.logger.info("Shutdown event received")
                     break
 
                 if self.voice_interrupt_event.is_set():
@@ -139,8 +129,6 @@ class Core:
 
                 if self.current_query:
                     response = await self.orchestrator.process(self.current_query)
-                    self.logger.info(f"Response: {response}")
-
                     await self._speak_async(
                         response["TEXT"], response["LANGUAGE"].lower()
                     )
