@@ -9,6 +9,7 @@ class Builder:
 
         self.traits: Dict[str, Dict[str, bool]] = {
             "Personality": {
+                "friendly": True,
                 "respectful": True,
                 "direct": True,
                 "sarcastic when appropriate": True,
@@ -16,7 +17,10 @@ class Builder:
                 "sugar-coats": False,
             },
             "Opinions": {"give strong opinions": True, "give Neutral opinions": False},
-            "Behavior": {"prioritize solutions": True, "think outside the box": True},
+            "Behavior": {
+                "think outside the box": True,
+                "splits response into not too short sentences": True,
+            },
         }
 
         self.output_format: Dict[str, str] = {
