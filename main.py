@@ -60,10 +60,34 @@ class Core:
         self.orchestrator = Orchestrator()
         self.voice_interrupt_event = asyncio.Event()
 
+        self.queue_shutdown_event = threading.Event()
+        self.queue_thread = threading.Thread(
+            target=self._process_queue_loop, daemon=True
+        )
+        self.queue_thread.start()
+
     def _start_stt_thread(self):
         self.stt = SpeechToText(sample_rate=self.sample_rate, core=self)
         self.tts.set_stt_reference(self.stt)
         self.stt.listen()
+
+    def _process_queue_loop(self):
+        while not self.queue_shutdown_event.is_set():
+            try:
+                if not self.tts.queue.empty():
+                    if self.stt:
+                        self.stt.set_tts_playing(True)
+
+                while not self.tts.queue.empty():
+                    if self.queue_shutdown_event.is_set():
+                        break
+                    self.tts.play_wav(self.tts.queue.get())
+
+                self.queue_shutdown_event.wait(0.1)
+
+            except Exception as e:
+                self.logger.error(f"Error in queue processing loop: {e}")
+                self.queue_shutdown_event.wait(0.1)
 
     def _on_query_ready(self, query: str):
         self.current_query = query
@@ -80,15 +104,6 @@ class Core:
             self.event_loop.call_soon_threadsafe(self.voice_interrupt_event.set)
         else:
             self.voice_interrupt_event.set()
-
-
-    def _process_queue(self):
-        if not self.tts.queue.empty():
-            if self.stt:
-                self.stt.set_tts_playing(True)
-
-        while not self.tts.queue.empty():
-            self.tts.play_wav(self.tts.queue.get())
 
     async def _speak_async(self, text: str, language: str):
         loop = asyncio.get_event_loop()
@@ -130,8 +145,6 @@ class Core:
                         response["TEXT"], response["LANGUAGE"].lower()
                     )
 
-                    self._process_queue()
-
                     self.current_query = None
                     self.query_event.clear()
 
@@ -141,6 +154,10 @@ class Core:
             except Exception as e:
                 self.logger.error(e)
                 break
+
+        self.queue_shutdown_event.set()
+        if self.queue_thread:
+            self.queue_thread.join()
 
         if self.stt:
             self.stt.shutdown_flag.set()
