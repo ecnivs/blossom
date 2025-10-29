@@ -8,6 +8,7 @@ dependencies = [
     "coqui-tts>=0.27.2",
     "dotenv>=0.9.9",
     "google-genai>=1.46.0",
+    "ollama>=0.6.0",
     "python-dotenv>=1.1.1",
     "pyyaml>=6.0.1",
     "sounddevice>=0.5.3",

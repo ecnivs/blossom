@@ -20,7 +20,7 @@ class Gemini:
         current_model = self.models.get(str(model))
 
         if not current_model:
-            self.logger.error(f"Model '{model}' not found in self.models")
+            self.logger.error(f"'{model}' not found in self.models")
             return None
 
         models_priority = list(self.models.values())
@@ -39,9 +39,7 @@ class Gemini:
                     if not text:
                         raise ValueError(f"No text in Gemini response: {response}")
 
-                    self.logger.info(
-                        f"Gemini returned (model={fallback_model}): {text}"
-                    )
+                    self.logger.info(f"{fallback_model} returned: {text}")
                     return text
 
                 except Exception as e:
