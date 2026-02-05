@@ -39,7 +39,12 @@ class PluginManager:
 
     def list_plugins(self):
         return [
-            {"name": n, "description": p["description"], "parameters": p["parameters"]}
+            {
+                "name": n,
+                "description": p["description"],
+                "parameters": p["parameters"],
+                "direct_tts": p.get("direct_tts", False),
+            }
             for n, p in self.plugins.items()
         ]
 

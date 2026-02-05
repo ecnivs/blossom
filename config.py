@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Union, Any
 import torch
+import platform
 
 
 @dataclass
@@ -88,6 +89,25 @@ class LoggingConfig:
         return getattr(logging, self.level.upper(), logging.DEBUG)
 
 
+def detect_os() -> str:
+    """Detect the operating system name."""
+    try:
+        if hasattr(platform, "freedesktop_os_release"):
+            info = platform.freedesktop_os_release()
+            return info.get("PRETTY_NAME", info.get("NAME", "Linux"))
+
+        with open("/etc/os-release") as f:
+            for line in f:
+                if line.startswith("PRETTY_NAME="):
+                    return line.split("=", 1)[1].strip().strip('"')
+                if line.startswith("NAME="):
+                    return line.split("=", 1)[1].strip().strip('"')
+    except (OSError, FileNotFoundError, AttributeError):
+        pass
+
+    return platform.system() or "Unknown"
+
+
 @dataclass
 class AppConfig:
     """Application configuration."""
@@ -97,6 +117,7 @@ class AppConfig:
     description: str = "My Voice Assistant"
     workspace_temp: bool = True
     loop_delay: float = 0.1
+    os: str = field(default_factory=detect_os)
 
 
 @dataclass

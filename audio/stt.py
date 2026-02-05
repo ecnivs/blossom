@@ -181,7 +181,11 @@ class SpeechToText:
                             self._cosine_similarity(spk) > self.threshold
                             or not config.stt.speaker_identification
                         ):
-                            if "text" in result and result["text"]:
+                            if (
+                                "text" in result
+                                and result["text"]
+                                and result["text"] != "huh"
+                            ):
                                 query_text = result["text"].strip()
                                 self.logger.info(f"Recognized {query_text}")
 

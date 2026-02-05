@@ -128,10 +128,10 @@ class Core:
                     continue
 
                 if self.current_query:
-                    response = await self.orchestrator.process(self.current_query)
-                    await self._speak_async(
-                        response["TEXT"], response["LANGUAGE"].lower()
-                    )
+                    async for response in self.orchestrator.process(self.current_query):
+                        await self._speak_async(
+                            response["TEXT"], response["LANGUAGE"].lower()
+                        )
 
                     self.current_query = None
                     self.query_event.clear()
