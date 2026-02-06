@@ -42,9 +42,9 @@ class Builder:
             instructions.append(f"- {p['name']}: {p['description']}")
             instructions.append(f"  Args: {p['parameters']}")
             if p.get("direct_tts"):
-                instructions.append(f"  (Default: Direct to Output)")
+                instructions.append("(Default: Direct to Output)")
             else:
-                instructions.append(f"  (Default: Return to LLM)")
+                instructions.append("(Default: Return to LLM)")
 
         instructions.append("\nTo call a plugin, you must strictly follow this format:")
         instructions.append("PLUGIN: <plugin_name>(<json_args>)")
@@ -72,9 +72,7 @@ class Builder:
         return ", ".join(formatted)
 
     def _get_personality(self, speaker: str) -> str:
-        sections = []
         os_info = f"You are running on {config.app.os}."
-
         return f"I am {speaker}. You are {self.name}, {self.role}. {os_info}"
 
     def build(self, speaker: str, query: str) -> str:
