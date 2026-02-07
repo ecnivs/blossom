@@ -83,8 +83,8 @@ class Core:
                 self.logger.error(f"Error in queue processing loop: {e}")
                 self.queue_shutdown_event.wait(0.1)
 
-    def _on_query_ready(self, query: str):
-        self.current_query = query
+    def _on_query_ready(self, query: str, speaker_name: str = None):
+        self.current_query = (query, speaker_name)
         if self.event_loop:
             self.event_loop.call_soon_threadsafe(self.query_event.set)
         else:
@@ -128,7 +128,10 @@ class Core:
                     continue
 
                 if self.current_query:
-                    async for response in self.orchestrator.process(self.current_query):
+                    query_text, speaker_name = self.current_query
+                    async for response in self.orchestrator.process(
+                        query_text, speaker_name=speaker_name
+                    ):
                         await self._speak_async(
                             response["TEXT"], response["LANGUAGE"].lower()
                         )

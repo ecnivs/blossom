@@ -1,4 +1,6 @@
 import subprocess
+import platform
+import os
 
 
 def shell_handler(command: str):
@@ -20,6 +22,10 @@ def shell_handler(command: str):
         return output if output.strip() else "Command executed with no output."
     except Exception as e:
         return f"Failed to execute command: {e}"
+
+
+def get_context():
+    return f"Operating System: {platform.system()} {platform.release()}; Shell: {os.environ.get('SHELL', 'Unknown')}; CWD: {os.getcwd()}"
 
 
 def register():

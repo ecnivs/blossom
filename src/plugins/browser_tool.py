@@ -9,6 +9,10 @@ def browser_handler(url: str):
         return f"Failed to open URL: {e}"
 
 
+def get_context():
+    return "Default Browser: System Default (via 'webbrowser' module)"
+
+
 def register():
     return {
         "name": "browser_tool",

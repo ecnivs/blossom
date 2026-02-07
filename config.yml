@@ -16,8 +16,8 @@ audio:
 stt:
   model_path: ".models/vosk/vosk-model-small-en-us-0.15"
   speaker_model_path: ".models/vosk/vosk-model-spk-0.4"
-  speaker_reference_path: ".speakers/vince.wav"
-  speaker_identification: false
+  speakers_directory: ".speakers"
+  require_known_speaker: false
   speaker_identification_threshold: 0.20
   max_amplitude: 1000
 

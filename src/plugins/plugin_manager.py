@@ -23,10 +23,16 @@ class PluginManager:
                     spec.loader.exec_module(module)
                     if hasattr(module, "register"):
                         result = module.register()
+                        context_func = getattr(module, "get_context", None)
+
                         if isinstance(result, list):
                             for r in result:
+                                if context_func:
+                                    r["get_context"] = context_func
                                 self._register_plugin(r)
                         else:
+                            if context_func:
+                                result["get_context"] = context_func
                             self._register_plugin(result)
                 except Exception as e:
                     print(f"[PluginManager] Failed to load {filename}: {e}")
@@ -47,6 +53,18 @@ class PluginManager:
             }
             for n, p in self.plugins.items()
         ]
+
+    def get_all_plugin_contexts(self):
+        contexts = []
+        for name, plugin in self.plugins.items():
+            if "get_context" in plugin:
+                try:
+                    context = plugin["get_context"]()
+                    if context:
+                        contexts.append(f"[{name} Context]: {context}")
+                except Exception as e:
+                    print(f"Error getting context from {name}: {e}")
+        return "\n".join(contexts)
 
     def call_plugin(self, name: str, **kwargs):
         if name not in self.plugins:

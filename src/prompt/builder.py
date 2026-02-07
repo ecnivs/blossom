@@ -30,7 +30,6 @@ class Builder:
             "RESPONSE": "text response without any special characters",
         }
 
-        # Use path relative to the src root (parent of prompt dir)
         current_dir = os.path.dirname(os.path.abspath(__file__))
         src_root = os.path.dirname(current_dir)
         plugins_path = os.path.join(src_root, "plugins")
@@ -78,12 +77,19 @@ class Builder:
 
     def _get_personality(self, speaker: str) -> str:
         os_info = f"You are running on {config.app.os}."
-        return f"I am {speaker}. You are {self.name}, {self.role}. {os_info}"
+        if speaker:
+            return f"I am {speaker}. You are {self.name}, {self.role}. {os_info}"
+        else:
+            return f"You are {self.name}, {self.role}. {os_info}"
 
     def build(self, speaker: str, query: str) -> str:
         output_lines = [f"{key}: {value}" for key, value in self.output_format.items()]
         output_section = "Provide output in this format:\n" + "\n".join(output_lines)
         plugin_section = self._get_plugin_instructions()
+
+        plugin_context = self.plugin_manager.get_all_plugin_contexts()
+        if plugin_context:
+            plugin_section += f"\n\nDynamic Plugin Context:\n{plugin_context}"
 
         timing_instruction = (
             "\nNote: If you provide a RESPONSE, it is spoken to the user WHILE the plugin action is being performed. "

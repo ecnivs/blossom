@@ -12,7 +12,6 @@ class Orchestrator:
     def __init__(self):
         self.logger = logging.getLogger(self.__class__.__name__)
 
-        # Use path relative to this file
         current_dir = os.path.dirname(os.path.abspath(__file__))
         plugins_path = os.path.join(current_dir, "plugins")
         self.plugin_manager = PluginManager(plugins_dir=plugins_path)
@@ -29,13 +28,13 @@ class Orchestrator:
             )
         return self.plugin_manager.call_plugin(name, **kwargs)
 
-    async def process(self, query):
+    async def process(self, query, speaker_name=None):
         history = []
         max_turns = 5
         current_query = query
 
         for _ in range(max_turns):
-            prompt = self.prompt.build("Vince", current_query)
+            prompt = self.prompt.build(speaker_name, current_query)
             if history:
                 prompt += "\n\nContext:\n" + "\n".join(history)
 
@@ -54,7 +53,6 @@ class Orchestrator:
                     "TEXT": text,
                 }
 
-            # Check for plugins
             plugin_call_found = False
             for line in response.splitlines():
                 if line.startswith("PLUGIN:"):
