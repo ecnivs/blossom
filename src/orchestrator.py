@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import json
 from response import Gemini
@@ -11,7 +12,10 @@ class Orchestrator:
     def __init__(self):
         self.logger = logging.getLogger(self.__class__.__name__)
 
-        self.plugin_manager = PluginManager(plugins_dir="plugins")
+        # Use path relative to this file
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        plugins_path = os.path.join(current_dir, "plugins")
+        self.plugin_manager = PluginManager(plugins_dir=plugins_path)
         self.plugin_manager.discover_plugins()
 
         self.prompt = Builder()

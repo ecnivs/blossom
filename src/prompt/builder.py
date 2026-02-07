@@ -1,3 +1,4 @@
+import os
 from typing import Dict
 from config import config
 from plugins import PluginManager
@@ -29,7 +30,11 @@ class Builder:
             "RESPONSE": "text response without any special characters",
         }
 
-        self.plugin_manager = PluginManager(plugins_dir="plugins")
+        # Use path relative to the src root (parent of prompt dir)
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        src_root = os.path.dirname(current_dir)
+        plugins_path = os.path.join(src_root, "plugins")
+        self.plugin_manager = PluginManager(plugins_dir=plugins_path)
         self.plugin_manager.discover_plugins()
 
     def _get_plugin_instructions(self) -> str:
