@@ -12,10 +12,8 @@ from .shared_audio import audio_reference
 import speexdsp
 from config import config
 import time
-
-
-import os
 from pathlib import Path
+
 
 class SpeechToText:
     def __init__(self, sample_rate, core=None) -> None:
@@ -33,7 +31,7 @@ class SpeechToText:
 
         self.speakers = {}
         self._load_speakers(config.stt.speakers_directory)
-        
+
         self.threshold = config.stt.speaker_identification_threshold
 
         self.echo_canceller = speexdsp.EchoCanceller_create(
@@ -79,25 +77,26 @@ class SpeechToText:
             data = data.mean(axis=1)
 
         pcm_data = (data * 32767).astype(np.int16).tobytes()
+
         # Create a temporary recognizer for loading profiles to avoid state issues
         rec = KaldiRecognizer(self.model, self.sample_rate, self.spk_model)
         rec.AcceptWaveform(pcm_data)
 
         result = json.loads(rec.FinalResult())
         if "spk" not in result:
-             raise ValueError("No speaker vector found in audio file")
+            raise ValueError("No speaker vector found in audio file")
         return np.array(result["spk"])
 
     def _identify_speaker(self, input_vector):
         best_score = -1.0
         best_match = "User"
-        
+
         for name, vector in self.speakers.items():
             score = self._cosine_similarity(vector, input_vector)
             if score > best_score:
                 best_score = score
                 best_match = name
-                
+
         return best_match, best_score
 
     def _audio_callback(
@@ -214,18 +213,22 @@ class SpeechToText:
 
                     if "spk" in result:
                         spk = result["spk"]
-                        
+
                         identified_speaker, score = self._identify_speaker(spk)
                         is_authorized = False
-                        
+
                         if score > self.threshold:
-                            self.logger.info(f"Identified speaker: {identified_speaker} (Score: {score:.2f})")
+                            self.logger.info(
+                                f"Identified speaker: {identified_speaker} (Score: {score:.2f})"
+                            )
                             is_authorized = True
                         else:
-                            self.logger.info(f"Speaker not identified (Best: {identified_speaker}, Score: {score:.2f})")
+                            self.logger.info(
+                                f"Speaker not identified (Best: {identified_speaker}, Score: {score:.2f})"
+                            )
                             if not config.stt.require_known_speaker:
                                 is_authorized = True
-                                identified_speaker = None # Fallback: No specific name
+                                identified_speaker = None  # Fallback: No specific name
 
                         if is_authorized:
                             if (
@@ -244,7 +247,9 @@ class SpeechToText:
 
                                 if not self.tts_playing:
                                     if self.core:
-                                        self.core._on_query_ready(query_text, speaker_name=identified_speaker)
+                                        self.core._on_query_ready(
+                                            query_text, speaker_name=identified_speaker
+                                        )
                                 elif (
                                     self.tts_playing
                                     and not self.voice_activity_detected
