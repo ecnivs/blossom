@@ -77,6 +77,15 @@ class GeminiConfig:
 
 
 @dataclass
+class CacheConfig:
+    """Semantic caching configuration."""
+
+    enabled: bool = True
+    similarity_threshold: float = 0.85
+    persist_directory: str = ".cache/chroma"
+
+
+@dataclass
 class LoggingConfig:
     """Logging configuration."""
 
@@ -116,7 +125,7 @@ class AppConfig:
     version: str = "0.1.0"
     description: str = "My Voice Assistant"
     workspace_temp: bool = True
-    loop_delay: float = 0.1
+    loop_delay: float = 0.5
     os: str = field(default_factory=detect_os)
 
 
@@ -151,6 +160,7 @@ class Config:
     stt: STTConfig = field(default_factory=STTConfig)
     tts: TTSConfig = field(default_factory=TTSConfig)
     gemini: GeminiConfig = field(default_factory=GeminiConfig)
+    cache: CacheConfig = field(default_factory=CacheConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     app: AppConfig = field(default_factory=AppConfig)
     assistant: AssistantConfig = field(default_factory=AssistantConfig)
@@ -200,6 +210,7 @@ class Config:
         stt_config = STTConfig(**config_data.get("stt", {}))
         tts_config = TTSConfig(**config_data.get("tts", {}))
         gemini_config = GeminiConfig(**config_data.get("gemini", {}))
+        cache_config = CacheConfig(**config_data.get("cache", {}))
         logging_config = LoggingConfig(**config_data.get("logging", {}))
         app_config = AppConfig(**config_data.get("app", {}))
         assistant_config = AssistantConfig(**config_data.get("assistant", {}))
@@ -209,6 +220,7 @@ class Config:
             stt=stt_config,
             tts=tts_config,
             gemini=gemini_config,
+            cache=cache_config,
             logging=logging_config,
             app=app_config,
             assistant=assistant_config,
@@ -252,6 +264,11 @@ class Config:
                 "default_model": self.gemini.default_model,
                 "max_retries": self.gemini.max_retries,
                 "retry_delay_base": self.gemini.retry_delay_base,
+            },
+            "cache": {
+                "enabled": self.cache.enabled,
+                "similarity_threshold": self.cache.similarity_threshold,
+                "persist_directory": self.cache.persist_directory,
             },
             "logging": {
                 "level": self.logging.level,

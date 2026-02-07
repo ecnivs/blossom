@@ -6,6 +6,7 @@ from response import Gemini
 from prompt import Builder
 from config import config
 from plugins import PluginManager
+from cache.manager import SemanticCacheManager
 
 
 class Orchestrator:
@@ -20,6 +21,7 @@ class Orchestrator:
         self.prompt = Builder()
 
         self.gemini = Gemini()
+        self.cache_manager = SemanticCacheManager()
 
     def _call_plugin(self, name, **kwargs):
         if name not in self.plugin_manager.plugins:
@@ -34,6 +36,17 @@ class Orchestrator:
         current_query = query
 
         for _ in range(max_turns):
+            # Check cache first (only for initial query to avoid context issues with follow-up)
+            if not history and _ == 0:
+                cached_response = self.cache_manager.get(current_query)
+                if cached_response:
+                    self.logger.info("Serving from cache.")
+                    yield {
+                        "LANGUAGE": config.assistant.default_language,
+                        "TEXT": cached_response,
+                    }
+                    return
+
             prompt = self.prompt.build(speaker_name, current_query)
             if history:
                 prompt += "\n\nContext:\n" + "\n".join(history)
@@ -115,6 +128,10 @@ class Orchestrator:
                                     "TEXT": str(response_text),
                                 }
                             return
+
+            # Cache the response if valid and no plugins were called, and ONLY if this was the initial query
+            if text and not plugin_call_found and not history:
+                self.cache_manager.add(current_query, text)
 
             if not plugin_call_found:
                 return
