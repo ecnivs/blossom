@@ -1,24 +1,32 @@
+import logging
 import importlib.util
-import os
 import traceback
 import json
+from pathlib import Path
+from typing import Dict, Any
 
 
 class PluginManager:
     def __init__(self, plugins_dir: str):
-        self.plugins_dir = plugins_dir
-        self.plugins = {}
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.plugins_dir = Path(plugins_dir)
+        self.plugins: Dict[str, Dict[str, Any]] = {}
 
     def discover_plugins(self):
-        for filename in os.listdir(self.plugins_dir):
-            if filename.endswith(".py") and filename not in (
-                "__init__.py",
-                "plugin_manager.py",
-            ):
-                path = os.path.join(self.plugins_dir, filename)
-                module_name = filename[:-3]
-                try:
-                    spec = importlib.util.spec_from_file_location(module_name, path)
+        self.logger.info(f"Discovering plugins in {self.plugins_dir}")
+        if not self.plugins_dir.exists():
+            self.logger.warning(f"Plugin directory {self.plugins_dir} does not exist.")
+            return
+
+        for file_path in self.plugins_dir.glob("*.py"):
+            filename = file_path.name
+            if filename in ("__init__.py", "plugin_manager.py"):
+                continue
+
+            module_name = file_path.stem
+            try:
+                spec = importlib.util.spec_from_file_location(module_name, file_path)
+                if spec and spec.loader:
                     module = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(module)
                     if hasattr(module, "register"):
@@ -34,14 +42,18 @@ class PluginManager:
                             if context_func:
                                 result["get_context"] = context_func
                             self._register_plugin(result)
-                except Exception as e:
-                    print(f"[PluginManager] Failed to load {filename}: {e}")
-                    traceback.print_exc()
+            except Exception as e:
+                self.logger.error(f"Failed to load plugin {filename}: {e}")
+                self.logger.debug(traceback.format_exc())
 
-    def _register_plugin(self, plugin_data: dict):
-        name = plugin_data["name"]
+    def _register_plugin(self, plugin_data: Dict[str, Any]):
+        name = plugin_data.get("name")
+        if not name:
+            self.logger.warning("Plugin data missing 'name' field. Skipping.")
+            return
+
         self.plugins[name] = plugin_data
-        print(f"[PluginManager] Registered plugin: {name}")
+        self.logger.info(f"Registered plugin: {name}")
 
     def list_plugins(self):
         return [
@@ -54,7 +66,7 @@ class PluginManager:
             for n, p in self.plugins.items()
         ]
 
-    def get_all_plugin_contexts(self):
+    def get_all_plugin_contexts(self) -> str:
         contexts = []
         for name, plugin in self.plugins.items():
             if "get_context" in plugin:
@@ -63,20 +75,28 @@ class PluginManager:
                     if context:
                         contexts.append(f"[{name} Context]: {context}")
                 except Exception as e:
-                    print(f"Error getting context from {name}: {e}")
+                    self.logger.error(f"Error getting context from {name}: {e}")
         return "\n".join(contexts)
 
-    def call_plugin(self, name: str, **kwargs):
+    def call_plugin(self, name: str, **kwargs) -> Any:
         if name not in self.plugins:
-            raise ValueError(f"No plugin named '{name}' loaded.")
-        handler = self.plugins[name]["handler"]
+            error_msg = f"No plugin named '{name}' loaded."
+            self.logger.warning(error_msg)
+            raise ValueError(error_msg)
+
+        handler = self.plugins[name].get("handler")
+        if not handler:
+            self.logger.error(f"Plugin '{name}' has no handler.")
+            return {"error": f"Plugin '{name}' has no handler."}
+
         try:
             return handler(**kwargs)
         except Exception as e:
-            traceback.print_exc()
+            self.logger.error(f"Error executing plugin {name}: {e}")
+            self.logger.debug(traceback.format_exc())
             return {"error": str(e)}
 
     def debug_dump(self):
-        print(
+        self.logger.debug(
             json.dumps({n: list(p.keys()) for n, p in self.plugins.items()}, indent=2)
         )

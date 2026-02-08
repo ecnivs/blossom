@@ -23,12 +23,17 @@ class VectorStore:
     - Hybrid search with metadata filtering
     """
 
-    def __init__(self, persist_directory: str):
+    def __init__(
+        self,
+        persist_directory: str,
+        embedding_model_name: str = "all-MiniLM-L6-v2",
+    ):
         """
         Initialize vector store.
 
         Args:
             persist_directory: Path to ChromaDB persistence directory
+            embedding_model_name: Name of the sentence-transformers model
         """
         self.logger = logging.getLogger(self.__class__.__name__)
         self.persist_directory = persist_directory
@@ -36,21 +41,18 @@ class VectorStore:
         try:
             self.client = chromadb.PersistentClient(path=persist_directory)
 
-            # Use local sentence-transformers embeddings
             self.embedding_fn = (
                 embedding_functions.SentenceTransformerEmbeddingFunction(
-                    model_name="all-MiniLM-L6-v2"
+                    model_name=embedding_model_name
                 )
             )
 
-            # Collection for conversation turn embeddings
             self.turns_collection = self.client.get_or_create_collection(
                 name="conversation_turns",
                 embedding_function=self.embedding_fn,
                 metadata={"hnsw:space": "cosine"},
             )
 
-            # Collection for semantic memory embeddings
             self.memories_collection = self.client.get_or_create_collection(
                 name="semantic_memories",
                 embedding_function=self.embedding_fn,
@@ -63,7 +65,28 @@ class VectorStore:
             self.logger.error(f"Failed to initialize vector store: {e}")
             raise
 
-    # ==================== Turn Embeddings ====================
+    def _create_turn_metadata(self, turn: ConversationTurn) -> Dict[str, Any]:
+        """Create metadata dictionary for a conversation turn."""
+        metadata = {
+            "session_id": turn.session_id,
+            "timestamp": turn.timestamp.isoformat(),
+            "speaker": turn.speaker,
+            "source": turn.source,
+            "importance_score": float(turn.importance_score),
+        }
+        if turn.speaker_name:
+            metadata["speaker_name"] = turn.speaker_name
+        return metadata
+
+    def _create_memory_metadata(self, memory: SemanticMemory) -> Dict[str, Any]:
+        """Create metadata dictionary for a semantic memory."""
+        return {
+            "memory_type": memory.memory_type,
+            "confidence": float(memory.confidence),
+            "importance": float(memory.importance),
+            "created_at": memory.created_at.isoformat(),
+            "access_count": int(memory.access_count),
+        }
 
     def add_turn_embedding(self, turn: ConversationTurn) -> None:
         """
@@ -73,17 +96,7 @@ class VectorStore:
             turn: ConversationTurn to embed and store
         """
         try:
-            metadata = {
-                "session_id": turn.session_id,
-                "timestamp": turn.timestamp.isoformat(),
-                "speaker": turn.speaker,
-                "source": turn.source,
-                "importance_score": turn.importance_score,
-            }
-
-            if turn.speaker_name:
-                metadata["speaker_name"] = turn.speaker_name
-
+            metadata = self._create_turn_metadata(turn)
             self.turns_collection.upsert(
                 documents=[turn.text], ids=[turn.turn_id], metadatas=[metadata]
             )
@@ -150,8 +163,6 @@ class VectorStore:
             self.logger.error(f"Error getting turn embedding: {e}")
             return None
 
-    # ==================== Semantic Memory Embeddings ====================
-
     def add_memory_embedding(self, memory: SemanticMemory) -> None:
         """
         Add or update a semantic memory embedding.
@@ -160,14 +171,7 @@ class VectorStore:
             memory: SemanticMemory to embed and store
         """
         try:
-            metadata = {
-                "memory_type": memory.memory_type,
-                "confidence": memory.confidence,
-                "importance": memory.importance,
-                "created_at": memory.created_at.isoformat(),
-                "access_count": memory.access_count,
-            }
-
+            metadata = self._create_memory_metadata(memory)
             self.memories_collection.upsert(
                 documents=[memory.content], ids=[memory.memory_id], metadatas=[metadata]
             )
@@ -197,7 +201,6 @@ class VectorStore:
             List of (memory_id, distance, metadata) tuples
         """
         try:
-            # Build where filter with proper $and syntax for ChromaDB
             where_conditions = []
 
             if min_importance > 0.0:
@@ -248,8 +251,6 @@ class VectorStore:
             self.logger.error(f"Error getting memory embedding: {e}")
             return None
 
-    # ==================== Batch Operations ====================
-
     def add_turns_batch(self, turns: List[ConversationTurn]) -> None:
         """Add multiple turns in a batch for efficiency."""
         if not turns:
@@ -258,16 +259,7 @@ class VectorStore:
         try:
             documents = [turn.text for turn in turns]
             ids = [turn.turn_id for turn in turns]
-            metadatas = [
-                {
-                    "session_id": turn.session_id,
-                    "timestamp": turn.timestamp.isoformat(),
-                    "speaker": turn.speaker,
-                    "source": turn.source,
-                    "importance_score": turn.importance_score,
-                }
-                for turn in turns
-            ]
+            metadatas = [self._create_turn_metadata(turn) for turn in turns]
 
             self.turns_collection.upsert(
                 documents=documents, ids=ids, metadatas=metadatas
@@ -286,16 +278,7 @@ class VectorStore:
         try:
             documents = [memory.content for memory in memories]
             ids = [memory.memory_id for memory in memories]
-            metadatas = [
-                {
-                    "memory_type": memory.memory_type,
-                    "confidence": memory.confidence,
-                    "importance": memory.importance,
-                    "created_at": memory.created_at.isoformat(),
-                    "access_count": memory.access_count,
-                }
-                for memory in memories
-            ]
+            metadatas = [self._create_memory_metadata(memory) for memory in memories]
 
             self.memories_collection.upsert(
                 documents=documents, ids=ids, metadatas=metadatas
@@ -305,8 +288,6 @@ class VectorStore:
 
         except Exception as e:
             self.logger.error(f"Error in batch memory addition: {e}")
-
-    # ==================== Cleanup Operations ====================
 
     def delete_turn_embeddings(self, turn_ids: List[str]) -> None:
         """Delete turn embeddings by IDs."""

@@ -32,23 +32,19 @@ class ConversationTurn:
     turn_id: str
     session_id: str
     timestamp: datetime
-    speaker: str  # 'user' or 'assistant'
-    speaker_name: Optional[str]  # Identified speaker name (e.g., "Alice")
+    speaker: str
+    speaker_name: Optional[str]
     text: str
     language: str
-    source: str  # 'user_input', 'cache_hit', or 'generated'
+    source: str
 
-    # Cache metadata (only for cache hits)
     cache_distance: Optional[float] = None
 
-    # Plugin metadata
     plugin_calls: List[Dict[str, Any]] = field(default_factory=list)
 
-    # Memory metadata
     embedding: Optional[np.ndarray] = None
-    importance_score: float = 0.5  # 0.0 to 1.0
+    importance_score: float = 0.5
 
-    # Access tracking
     created_at: datetime = field(default_factory=datetime.now)
     last_accessed: Optional[datetime] = None
     access_count: int = 0
@@ -100,12 +96,10 @@ class ConversationSession:
     end_time: Optional[datetime] = None
     turns: List[ConversationTurn] = field(default_factory=list)
 
-    # Session metadata
     summary: Optional[str] = None
     topics: List[str] = field(default_factory=list)
     total_turns: int = 0
 
-    # Consolidation tracking
     is_consolidated: bool = False
     consolidated_at: Optional[datetime] = None
 
@@ -133,7 +127,6 @@ class ConversationSession:
             data["end_time"] = datetime.fromisoformat(data["end_time"])
         if data.get("consolidated_at"):
             data["consolidated_at"] = datetime.fromisoformat(data["consolidated_at"])
-        # Don't include turns in from_dict - they're loaded separately
         data.pop("turns", None)
         return cls(**data)
 
@@ -150,25 +143,20 @@ class SemanticMemory:
 
     memory_id: str
     content: str
-    memory_type: str  # 'fact', 'preference', 'instruction', 'context'
+    memory_type: str
 
-    # Source tracking
     source_sessions: List[str] = field(default_factory=list)
     source_turns: List[str] = field(default_factory=list)
 
-    # Confidence and importance
-    confidence: float = 0.5  # 0.0 to 1.0
-    importance: float = 0.5  # 0.0 to 1.0
+    confidence: float = 0.5
+    importance: float = 0.5
 
-    # Temporal metadata
     created_at: datetime = field(default_factory=datetime.now)
     last_accessed: Optional[datetime] = None
     last_updated: Optional[datetime] = None
 
-    # Access tracking
     access_count: int = 0
 
-    # Vector embedding
     embedding: Optional[np.ndarray] = None
 
     def to_dict(self) -> Dict[str, Any]:
