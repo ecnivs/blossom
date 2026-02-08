@@ -104,6 +104,9 @@ class Core:
     async def run(self):
         self.event_loop = asyncio.get_running_loop()
 
+        if hasattr(self, "orchestrator") and self.orchestrator.consolidation_task:
+            await self.orchestrator.consolidation_task.start()
+
         while not self.shutdown_event.is_set():
             try:
                 _, pending = await asyncio.wait(
@@ -145,6 +148,9 @@ class Core:
             except Exception as e:
                 self.logger.error(e)
                 break
+
+        if hasattr(self, "orchestrator") and self.orchestrator.consolidation_task:
+            await self.orchestrator.consolidation_task.stop()
 
         self.queue_shutdown_event.set()
         if self.queue_thread:

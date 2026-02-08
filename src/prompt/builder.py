@@ -86,7 +86,12 @@ class Builder:
         else:
             return f"You are {self.name}, {self.role}. {os_info} {memory_info}"
 
-    def build(self, speaker: str, query: str, chat_history=None) -> str:
+    def build(
+        self, speaker: str, query: str, chat_history=None, relevant_memories=None
+    ) -> str:
+        from memory.models import ConversationTurn, SemanticMemory
+        from datetime import datetime
+
         output_lines = [f"{key}: {value}" for key, value in self.output_format.items()]
         output_section = "Provide output in this format:\n" + "\n".join(output_lines)
         plugin_section = self._get_plugin_instructions()
@@ -100,20 +105,54 @@ class Builder:
             "Speak in the present tense (e.g., 'Opening...' not 'I will open...')."
         )
 
-        # Add chat history from current session if available
         history_context = ""
         if chat_history:
-            from memory.models import ConversationTurn
-
             history_context = "\n\n=== CONVERSATION HISTORY (Current Session) ==="
             for turn in chat_history:
                 if isinstance(turn, ConversationTurn):
-                    # Show full conversation turns
                     snippet = (
                         turn.text[:150] + "..." if len(turn.text) > 150 else turn.text
                     )
-                    history_context += f"\n{turn.speaker}: {snippet}"
+                    time_diff = datetime.now() - turn.timestamp
+                    if time_diff.total_seconds() < 60:
+                        time_ago = "just now"
+                    elif time_diff.total_seconds() < 3600:
+                        mins = int(time_diff.total_seconds() / 60)
+                        time_ago = f"{mins}m ago"
+                    elif time_diff.total_seconds() < 86400:
+                        hours = int(time_diff.total_seconds() / 3600)
+                        time_ago = f"{hours}h ago"
+                    else:
+                        days = int(time_diff.total_seconds() / 86400)
+                        time_ago = f"{days}d ago"
+
+                    history_context += f"\n[{time_ago}] {turn.speaker}: {snippet}"
         else:
             self.logger.debug("No chat history for this session yet")
 
-        return f"{self._get_personality(speaker=speaker)}{timing_instruction}\n\n{plugin_section}{history_context}\n\n{output_section}\nQuery: {query}"
+        memory_context = ""
+        if relevant_memories:
+            memory_context = (
+                "\n\n=== RELEVANT CONTEXT (From Past Conversations & Knowledge) ==="
+            )
+            for memory in relevant_memories:
+                if isinstance(memory, ConversationTurn):
+                    time_diff = datetime.now() - memory.timestamp
+                    days_ago = int(time_diff.total_seconds() / 86400)
+                    if days_ago == 0:
+                        time_label = "earlier today"
+                    elif days_ago == 1:
+                        time_label = "yesterday"
+                    else:
+                        time_label = f"{days_ago} days ago"
+
+                    snippet = (
+                        memory.text[:200] + "..."
+                        if len(memory.text) > 200
+                        else memory.text
+                    )
+                    memory_context += f"\n[{time_label}] {memory.speaker}: {snippet}"
+                elif isinstance(memory, SemanticMemory):
+                    memory_context += f"\n[Knowledge] {memory.content}"
+
+        return f"{self._get_personality(speaker=speaker)}{timing_instruction}\n\n{plugin_section}{history_context}{memory_context}\n\n{output_section}\nQuery: {query}"

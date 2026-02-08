@@ -8,7 +8,7 @@ from prompt import Builder
 from config import config
 from plugins import PluginManager
 from cache.manager import SemanticCacheManager
-from memory import MemoryManager, ConversationTurn, generate_id
+from memory import MemoryManager, ConversationTurn, generate_id, MemoryConsolidationTask
 
 
 class Orchestrator:
@@ -31,6 +31,13 @@ class Orchestrator:
             enabled=config.memory.enabled,
         )
         self.current_session_id = None
+
+        self.consolidation_task = None
+        if config.memory.enabled and config.memory.episodic_auto_consolidate:
+            self.consolidation_task = MemoryConsolidationTask(
+                self.memory_manager,
+                interval_minutes=config.memory.episodic_consolidation_delay_minutes,
+            )
 
     def _call_plugin(self, name, **kwargs):
         if name not in self.plugin_manager.plugins:
@@ -65,13 +72,23 @@ class Orchestrator:
         )
         await self.memory_manager.add_turn(user_turn)
 
+        relevant_memories = await self.memory_manager.retrieve_relevant_context(
+            query=query,
+            max_results=config.memory.retrieval_max_results,
+            time_decay=config.memory.retrieval_time_decay_enabled,
+            importance_threshold=config.memory.retrieval_importance_threshold,
+            include_semantic=config.memory.semantic_enabled,
+            include_episodic=True,
+            exclude_turn_ids=[user_turn_id],
+        )
+
         recent_turns = await self.memory_manager.get_working_context(
             max_turns=config.memory.working_memory_max_turns
         )
         chat_history = [turn for turn in recent_turns if turn.turn_id != user_turn_id]
 
         self.logger.info(
-            f"Using {len(chat_history)} turns from current session as context"
+            f"Using {len(chat_history)} turns from current session + {len(relevant_memories)} from long-term memory"
         )
 
         for _ in range(max_turns):
@@ -80,7 +97,6 @@ class Orchestrator:
                 if cached_response:
                     self.logger.info("Serving from cache.")
 
-                    # Extract response text based on return type
                     if isinstance(cached_response, dict):
                         response_text = cached_response.get("text", cached_response)
                         cache_distance = cached_response.get("distance", 0.0)
@@ -88,7 +104,6 @@ class Orchestrator:
                         response_text = cached_response
                         cache_distance = 0.0
 
-                    # Record assistant turn from cache
                     assistant_turn = ConversationTurn(
                         turn_id=generate_id(),
                         session_id=self.current_session_id,
@@ -110,7 +125,9 @@ class Orchestrator:
                     }
                     return
 
-            prompt = self.prompt.build(speaker_name, current_query, chat_history)
+            prompt = self.prompt.build(
+                speaker_name, current_query, chat_history, relevant_memories
+            )
             if history:
                 prompt += "\n\nContext:\n" + "\n".join(history)
 
@@ -127,7 +144,6 @@ class Orchestrator:
                     cacheable = cacheable_str in ["true", "yes", "1"]
 
             if text:
-                # Record assistant turn from generation
                 assistant_turn = ConversationTurn(
                     turn_id=generate_id(),
                     session_id=self.current_session_id,

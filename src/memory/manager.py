@@ -139,8 +139,6 @@ class MemoryManager:
 
         return idle_time.total_seconds() > (self.session_idle_threshold_minutes * 60)
 
-    # ==================== Turn Management ====================
-
     async def add_turn(self, turn: ConversationTurn) -> None:
         """
         Add a conversation turn to memory.
@@ -151,25 +149,18 @@ class MemoryManager:
         if not self.enabled:
             return
 
-        # Ensure we have an active session
         if not self.current_session_id:
             await self.start_session()
             turn.session_id = self.current_session_id
 
-        # Add to working memory
         self.working_memory.append(turn)
 
-        # Trim working memory if needed
         if len(self.working_memory) > self.working_memory_size:
             self.working_memory = self.working_memory[-self.working_memory_size :]
 
-        # Save to database
         await asyncio.to_thread(self.sqlite_store.save_turn, turn)
-
-        # Add embedding to vector store (async)
         asyncio.create_task(self._add_turn_embedding_async(turn))
 
-        # Update session turn count
         if self.current_session:
             self.current_session.total_turns += 1
             await asyncio.to_thread(
@@ -204,8 +195,6 @@ class MemoryManager:
             max_turns = self.working_memory_size
 
         return self.working_memory[-max_turns:]
-
-    # ==================== Memory Retrieval ====================
 
     async def retrieve_relevant_context(
         self,
@@ -426,8 +415,11 @@ class MemoryManager:
         """
         Consolidate a session by extracting semantic memories.
 
-        This is a placeholder for future implementation that will use
-        an LLM to extract facts, preferences, and knowledge from the session.
+        Uses an LLM to analyze conversation turns and extract:
+        - Facts about the user
+        - User preferences
+        - Instructions or requests
+        - Important contextual information
 
         Args:
             session_id: Session to consolidate
@@ -435,14 +427,122 @@ class MemoryManager:
         if not self.enabled:
             return
 
-        self.logger.info(f"Consolidation for session {session_id} (placeholder)")
+        try:
+            # Get session and its turns
+            session = await asyncio.to_thread(self.sqlite_store.get_session, session_id)
+            if not session or session.is_consolidated:
+                return
 
-        # Mark session as consolidated
-        session = await asyncio.to_thread(self.sqlite_store.get_session, session_id)
-        if session:
+            turns = await asyncio.to_thread(
+                self.sqlite_store.get_session_turns, session_id
+            )
+
+            if not turns or len(turns) < 2:  # Need at least 2 turns to extract meaning
+                self.logger.info(
+                    f"Session {session_id} has too few turns for consolidation"
+                )
+                return
+
+            # Build conversation text for analysis
+            conversation_text = ""
+            for turn in turns:
+                conversation_text += f"{turn.speaker}: {turn.text}\n"
+
+            # Use LLM to extract semantic memories
+            from response import Gemini
+
+            gemini = Gemini()
+
+            extraction_prompt = f"""Analyze this conversation and extract important information to remember long-term.
+
+Extract:
+1. FACTS: Concrete facts about the user (name, location, job, etc.)
+2. PREFERENCES: User likes, dislikes, or preferences
+3. INSTRUCTIONS: Specific requests or how the user wants things done
+4. CONTEXT: Important background information
+
+Conversation:
+{conversation_text}
+
+Provide output in this exact format (one item per line):
+FACT: <fact text>
+PREFERENCE: <preference text>
+INSTRUCTION: <instruction text>
+CONTEXT: <context text>
+
+Only include items that are clearly stated or strongly implied. If there are no items for a category, skip it.
+Be concise - each item should be one clear sentence."""
+
+            response = await gemini.get_response(extraction_prompt)
+
+            # Parse extracted memories
+            extracted_memories = []
+            for line in response.splitlines():
+                line = line.strip()
+                if line.startswith("FACT:"):
+                    content = line[5:].strip()
+                    if content:
+                        extracted_memories.append(("fact", content))
+                elif line.startswith("PREFERENCE:"):
+                    content = line[11:].strip()
+                    if content:
+                        extracted_memories.append(("preference", content))
+                elif line.startswith("INSTRUCTION:"):
+                    content = line[12:].strip()
+                    if content:
+                        extracted_memories.append(("instruction", content))
+                elif line.startswith("CONTEXT:"):
+                    content = line[8:].strip()
+                    if content:
+                        extracted_memories.append(("context", content))
+
+            # Store extracted memories with deduplication
+            for memory_type, content in extracted_memories:
+                # Check for similar existing memories to avoid duplicates
+                existing_memories = await asyncio.to_thread(
+                    self.sqlite_store.get_semantic_memories,
+                    memory_type=memory_type,
+                    min_importance=0.0,
+                )
+
+                # Simple deduplication: check if very similar content exists
+                is_duplicate = False
+                for existing in existing_memories:
+                    # If content is very similar (simple check), skip
+                    if (
+                        content.lower() in existing.content.lower()
+                        or existing.content.lower() in content.lower()
+                    ):
+                        is_duplicate = True
+                        self.logger.debug(
+                            f"Skipping duplicate memory: {content[:50]}..."
+                        )
+                        break
+
+                if not is_duplicate:
+                    memory = SemanticMemory(
+                        memory_id=generate_id(),
+                        content=content,
+                        memory_type=memory_type,
+                        source_sessions=[session_id],
+                        source_turns=[turn.turn_id for turn in turns],
+                        confidence=0.7,  # LLM-extracted, reasonably confident
+                        importance=0.6,  # Default importance, can be adjusted
+                    )
+                    await self.add_semantic_memory(memory)
+                    self.logger.info(f"Extracted {memory_type}: {content[:50]}...")
+
+            # Mark session as consolidated
             session.is_consolidated = True
             session.consolidated_at = datetime.now()
             await asyncio.to_thread(self.sqlite_store.save_session, session)
+
+            self.logger.info(
+                f"Consolidated session {session_id}: extracted {len(extracted_memories)} memories"
+            )
+
+        except Exception as e:
+            self.logger.error(f"Error consolidating session {session_id}: {e}")
 
     async def get_unconsolidated_sessions(self) -> List[ConversationSession]:
         """Get sessions that need consolidation."""
