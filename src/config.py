@@ -153,6 +153,28 @@ class AssistantConfig:
 
 
 @dataclass
+class MemoryConfig:
+    """Memory system configuration."""
+
+    enabled: bool = True
+    working_memory_max_turns: int = 20
+    episodic_retention_days: int = 30
+    episodic_auto_consolidate: bool = True
+    episodic_consolidation_delay_minutes: int = 5
+    session_idle_threshold_minutes: int = 30
+    semantic_enabled: bool = True
+    semantic_extraction_threshold: float = 0.6
+    semantic_max_memories: int = 1000
+    semantic_importance_decay_days: int = 90
+    storage_sqlite_path: str = ".memory/conversations.db"
+    storage_vector_db_path: str = ".memory/vectors"
+    retrieval_max_results: int = 5
+    retrieval_time_decay_enabled: bool = True
+    retrieval_time_decay_halflife_days: int = 7
+    retrieval_importance_threshold: float = 0.3
+
+
+@dataclass
 class Config:
     """Main configuration class containing all configuration sections."""
 
@@ -164,6 +186,7 @@ class Config:
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     app: AppConfig = field(default_factory=AppConfig)
     assistant: AssistantConfig = field(default_factory=AssistantConfig)
+    memory: MemoryConfig = field(default_factory=MemoryConfig)
 
     @classmethod
     def from_yaml(cls, config_path: Union[str, Path]) -> "Config":
@@ -215,6 +238,58 @@ class Config:
         app_config = AppConfig(**config_data.get("app", {}))
         assistant_config = AssistantConfig(**config_data.get("assistant", {}))
 
+        # Parse memory config with nested structure
+        memory_data = config_data.get("memory", {})
+        memory_flat = {
+            "enabled": memory_data.get("enabled", True),
+            "working_memory_max_turns": memory_data.get("working_memory", {}).get(
+                "max_turns", 20
+            ),
+            "episodic_retention_days": memory_data.get("episodic_memory", {}).get(
+                "retention_days", 30
+            ),
+            "episodic_auto_consolidate": memory_data.get("episodic_memory", {}).get(
+                "auto_consolidate", True
+            ),
+            "episodic_consolidation_delay_minutes": memory_data.get(
+                "episodic_memory", {}
+            ).get("consolidation_delay_minutes", 5),
+            "session_idle_threshold_minutes": memory_data.get(
+                "episodic_memory", {}
+            ).get("session_idle_threshold_minutes", 30),
+            "semantic_enabled": memory_data.get("semantic_memory", {}).get(
+                "enabled", True
+            ),
+            "semantic_extraction_threshold": memory_data.get("semantic_memory", {}).get(
+                "extraction_threshold", 0.6
+            ),
+            "semantic_max_memories": memory_data.get("semantic_memory", {}).get(
+                "max_memories", 1000
+            ),
+            "semantic_importance_decay_days": memory_data.get(
+                "semantic_memory", {}
+            ).get("importance_decay_days", 90),
+            "storage_sqlite_path": memory_data.get("storage", {}).get(
+                "sqlite_path", ".memory/conversations.db"
+            ),
+            "storage_vector_db_path": memory_data.get("storage", {}).get(
+                "vector_db_path", ".memory/vectors"
+            ),
+            "retrieval_max_results": memory_data.get("retrieval", {}).get(
+                "max_results", 5
+            ),
+            "retrieval_time_decay_enabled": memory_data.get("retrieval", {}).get(
+                "time_decay_enabled", True
+            ),
+            "retrieval_time_decay_halflife_days": memory_data.get("retrieval", {}).get(
+                "time_decay_halflife_days", 7
+            ),
+            "retrieval_importance_threshold": memory_data.get("retrieval", {}).get(
+                "importance_threshold", 0.3
+            ),
+        }
+        memory_config = MemoryConfig(**memory_flat)
+
         return cls(
             audio=audio_config,
             stt=stt_config,
@@ -224,6 +299,7 @@ class Config:
             logging=logging_config,
             app=app_config,
             assistant=assistant_config,
+            memory=memory_config,
         )
 
     def to_dict(self) -> Dict[str, Any]:

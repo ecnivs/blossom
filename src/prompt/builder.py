@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import Dict
 from config import config
@@ -8,6 +9,7 @@ class Builder:
     def __init__(self) -> None:
         self.name = config.assistant.name
         self.role = config.assistant.role
+        self.logger = logging.getLogger(self.__class__.__name__)
 
         self.traits: Dict[str, Dict[str, bool]] = {
             "Personality": {
@@ -28,6 +30,7 @@ class Builder:
         self.output_format: Dict[str, str] = {
             "LANGUAGE": "language code, detect the correct language for the response",
             "RESPONSE": "text response without any special characters",
+            "CACHEABLE": "true if safe to cache (general knowledge), false if context-dependent (e.g., 'what did I just say', time-sensitive)",
         }
 
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -77,12 +80,13 @@ class Builder:
 
     def _get_personality(self, speaker: str) -> str:
         os_info = f"You are running on {config.app.os}."
+        memory_info = "You have access to conversation history from previous sessions. When relevant context is provided below, use it to answer questions about past interactions."
         if speaker:
-            return f"I am {speaker}. You are {self.name}, {self.role}. {os_info}"
+            return f"I am {speaker}. You are {self.name}, {self.role}. {os_info} {memory_info}"
         else:
-            return f"You are {self.name}, {self.role}. {os_info}"
+            return f"You are {self.name}, {self.role}. {os_info} {memory_info}"
 
-    def build(self, speaker: str, query: str) -> str:
+    def build(self, speaker: str, query: str, chat_history=None) -> str:
         output_lines = [f"{key}: {value}" for key, value in self.output_format.items()]
         output_section = "Provide output in this format:\n" + "\n".join(output_lines)
         plugin_section = self._get_plugin_instructions()
@@ -96,4 +100,20 @@ class Builder:
             "Speak in the present tense (e.g., 'Opening...' not 'I will open...')."
         )
 
-        return f"{self._get_personality(speaker=speaker)}{timing_instruction}\n\n{plugin_section}\n\n{output_section}\nQuery: {query}"
+        # Add chat history from current session if available
+        history_context = ""
+        if chat_history:
+            from memory.models import ConversationTurn
+
+            history_context = "\n\n=== CONVERSATION HISTORY (Current Session) ==="
+            for turn in chat_history:
+                if isinstance(turn, ConversationTurn):
+                    # Show full conversation turns
+                    snippet = (
+                        turn.text[:150] + "..." if len(turn.text) > 150 else turn.text
+                    )
+                    history_context += f"\n{turn.speaker}: {snippet}"
+        else:
+            self.logger.debug("No chat history for this session yet")
+
+        return f"{self._get_personality(speaker=speaker)}{timing_instruction}\n\n{plugin_section}{history_context}\n\n{output_section}\nQuery: {query}"

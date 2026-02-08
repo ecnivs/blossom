@@ -67,3 +67,38 @@ assistant:
     - "ja"
     - "ko"
     - "zh"
+
+# Memory Configuration
+memory:
+  enabled: true
+  
+  # Working memory (current conversation)
+  working_memory:
+    max_turns: 20
+    
+  # Episodic memory (conversation sessions)
+  episodic_memory:
+    retention_days: 30
+    auto_consolidate: true
+    consolidation_delay_minutes: 5
+    session_idle_threshold_minutes: 30
+    
+  # Semantic memory (extracted knowledge)
+  semantic_memory:
+    enabled: true
+    extraction_threshold: 0.6
+    max_memories: 1000
+    importance_decay_days: 90
+    
+  # Storage
+  storage:
+    sqlite_path: ".memory/conversations.db"
+    vector_db_path: ".memory/vectors"
+    
+  # Retrieval
+  retrieval:
+    max_results: 5
+    time_decay_enabled: true
+    time_decay_halflife_days: 7
+    importance_threshold: 0.3
+
